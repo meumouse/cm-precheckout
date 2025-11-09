@@ -1,0 +1,21 @@
+{
+    "name": "meumouse/cm-precheckout",
+    "description": "Extensão que adiciona funcionalidades ao processo de compras no WooCommerce.",
+    "type": "library",
+    "license": "Proprietary",
+    "authors": [
+        {
+            "name": "MeuMouse.com",
+            "email": "contato@meumouse.com",
+            "homepage": "https://meumouse.com"
+        }
+    ],
+    "require": {
+        "php": ">= 7.4"
+    },
+    "autoload": {
+        "psr-4": {
+             "MeuMouse\\Cm_Precheckout\\": "inc/"
+        }
+    }
+}
