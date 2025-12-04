@@ -22,6 +22,13 @@ class ComposerStaticInit5c3987238c92dec963b613e1705b6782
 
     public static $classMap = array (
         'Composer\\InstalledVersions' => __DIR__ . '/..' . '/composer/InstalledVersions.php',
+        'MeuMouse\\Cm_Precheckout\\Admin\\Admin' => __DIR__ . '/../..' . '/inc/Admin/Admin.php',
+        'MeuMouse\\Cm_Precheckout\\Admin\\Product_Tab' => __DIR__ . '/../..' . '/inc/Admin/Product_Tab.php',
+        'MeuMouse\\Cm_Precheckout\\Core\\Ajax' => __DIR__ . '/../..' . '/inc/Core/Ajax.php',
+        'MeuMouse\\Cm_Precheckout\\Core\\Assets' => __DIR__ . '/../..' . '/inc/Core/Assets.php',
+        'MeuMouse\\Cm_Precheckout\\Core\\Plugin' => __DIR__ . '/../..' . '/inc/Core/Plugin.php',
+        'MeuMouse\\Cm_Precheckout\\Helpers\\Utils' => __DIR__ . '/../..' . '/inc/Helpers/Utils.php',
+        'MeuMouse\\Cm_Precheckout\\Views\\Frontend\\Shortcodes' => __DIR__ . '/../..' . '/inc/Views/Frontend/Shortcodes.php',
     );
 
     public static function getInitializer(ClassLoader $loader)

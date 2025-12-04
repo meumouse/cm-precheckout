@@ -7,4 +7,11 @@ $baseDir = dirname($vendorDir);
 
 return array(
     'Composer\\InstalledVersions' => $vendorDir . '/composer/InstalledVersions.php',
+    'MeuMouse\\Cm_Precheckout\\Admin\\Admin' => $baseDir . '/inc/Admin/Admin.php',
+    'MeuMouse\\Cm_Precheckout\\Admin\\Product_Tab' => $baseDir . '/inc/Admin/Product_Tab.php',
+    'MeuMouse\\Cm_Precheckout\\Core\\Ajax' => $baseDir . '/inc/Core/Ajax.php',
+    'MeuMouse\\Cm_Precheckout\\Core\\Assets' => $baseDir . '/inc/Core/Assets.php',
+    'MeuMouse\\Cm_Precheckout\\Core\\Plugin' => $baseDir . '/inc/Core/Plugin.php',
+    'MeuMouse\\Cm_Precheckout\\Helpers\\Utils' => $baseDir . '/inc/Helpers/Utils.php',
+    'MeuMouse\\Cm_Precheckout\\Views\\Frontend\\Shortcodes' => $baseDir . '/inc/Views/Frontend/Shortcodes.php',
 );

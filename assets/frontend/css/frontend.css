@@ -1,0 +1,221 @@
+/* Pre-checkout Modal */
+.cm-precheckout-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 9999;
+}
+
+.cm-precheckout-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.cm-precheckout-modal-content {
+    position: relative;
+    max-width: 800px;
+    width: 90%;
+    margin: 50px auto;
+    background: #fff;
+    border-radius: 8px;
+    padding: 30px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.cm-precheckout-close {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+}
+
+.cm-precheckout-close:hover {
+    color: #000;
+}
+
+/* Steps */
+.cm-precheckout-steps {
+    margin-top: 20px;
+}
+
+.cm-precheckout-step {
+    display: none;
+}
+
+.cm-precheckout-step.active {
+    display: block;
+}
+
+.cm-precheckout-step h3 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #eee;
+}
+
+/* Material Options */
+.material-options {
+    display: flex;
+    gap: 15px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+
+.material-option {
+    flex: 1;
+    min-width: 150px;
+}
+
+.material-option input[type="radio"] {
+    display: none;
+}
+
+.material-option label {
+    display: block;
+    padding: 15px;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.material-option input[type="radio"]:checked + label {
+    border-color: #007cba;
+    background: #f0f8ff;
+}
+
+/* Quantity Selector */
+.quantity-selector {
+    margin: 20px 0;
+}
+
+.quantity-input {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 10px;
+}
+
+.quantity-input button {
+    width: 30px;
+    height: 30px;
+    border: 1px solid #ddd;
+    background: #fff;
+    cursor: pointer;
+}
+
+.quantity-input input {
+    width: 50px;
+    height: 30px;
+    text-align: center;
+    border: 1px solid #ddd;
+    border-left: none;
+    border-right: none;
+}
+
+/* Size Selectors */
+.size-selectors {
+    margin: 20px 0;
+}
+
+.size-selector {
+    margin-bottom: 15px;
+}
+
+.size-selector label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.size-selector select {
+    width: 100%;
+    max-width: 200px;
+    padding: 8px;
+}
+
+.size-help {
+    margin-top: 20px;
+}
+
+.size-help a {
+    color: #007cba;
+    text-decoration: none;
+}
+
+.size-help a:hover {
+    text-decoration: underline;
+}
+
+/* Personalization Options */
+.personalization-options > div {
+    margin-bottom: 20px;
+}
+
+.name-fields input {
+    width: 100%;
+    max-width: 300px;
+    padding: 8px;
+    margin-bottom: 10px;
+}
+
+.course-selector select,
+.stone-selector select {
+    width: 100%;
+    max-width: 300px;
+    padding: 8px;
+}
+
+/* Order Summary */
+.order-summary {
+    background: #f9f9f9;
+    padding: 20px;
+    border-radius: 4px;
+    margin: 20px 0;
+}
+
+.summary-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.summary-item.total {
+    border-bottom: none;
+    font-weight: bold;
+    font-size: 1.2em;
+}
+
+/* Navigation Buttons */
+.cm-precheckout-step .button {
+    margin-right: 10px;
+    padding: 10px 20px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .cm-precheckout-modal-content {
+        width: 95%;
+        padding: 20px;
+        margin: 20px auto;
+    }
+    
+    .material-options {
+        flex-direction: column;
+    }
+    
+    .material-option {
+        min-width: 100%;
+    }
+}
