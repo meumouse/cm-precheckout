@@ -3,6 +3,7 @@
 namespace MeuMouse\Cm_Precheckout\Core;
 
 use Automattic\WooCommerce\Utilities\FeaturesUtil;
+use MeuMouse\Cm_Precheckout\Helpers\Utils;
 
 // Exit if accessed directly.
 defined('ABSPATH') || exit;
@@ -33,6 +34,29 @@ class Plugin {
     public const SLUG = 'cm-precheckout';
 
     /**
+     * Plugin instance.
+     * 
+     * @since 1.0.0
+     * @var Plugin
+     */
+    private static $instance = null;
+
+    /**
+     * Get plugin instance
+     * 
+     * @since 1.0.0
+     * @version 1.0.0
+     * @return Plugin
+     */
+    public static function get_instance() {
+        if ( null === self::$instance ) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+
+    
+    /**
      * Initialize the plugin.
      *
      * @since 1.0.0
@@ -40,20 +64,23 @@ class Plugin {
      */
     public function init() {
         // hook before plugin init
-		do_action('Cm_Precheckout/Before_Init');
+        do_action( 'Cm_Precheckout/Before_Init' );
 
         $this->define_constants();
-
-        // Load text domain
-        add_action( 'init', array( $this, 'load_textdomain' ) );
-
-        // set compatibility with WooCommerce HPOS (High-Performance Order Storage)
-        add_action( 'before_woocommerce_init', array( $this, 'setup_hpos_compatibility' ) );
-
+        $this->check_dependencies();
+        $this->load_textdomain();
+        $this->setup_hpos_compatibility();
         $this->instance_classes();
 
-        // hook before plugin init
-		do_action('Cm_Precheckout/After_Init');
+        // Register activation/deactivation hooks
+        register_activation_hook( CM_PRECHECKOUT_FILE, array( $this, 'activate' ) );
+        register_deactivation_hook( CM_PRECHECKOUT_FILE, array( $this, 'deactivate' ) );
+
+        // Clear cache on settings update
+        add_action( 'update_option_cm_precheckout_options', array( $this, 'clear_cache_on_settings_update' ), 10, 2 );
+
+        // hook after plugin init
+        do_action( 'Cm_Precheckout/After_Init' );
     }
 
 
@@ -78,8 +105,8 @@ class Plugin {
             'CM_PRECHECKOUT_ABSPATH'    => dirname( $base_file ) . '/',
             'CM_PRECHECKOUT_SLUG'       => self::SLUG,
             'CM_PRECHECKOUT_VERSION'    => self::VERSION,
-            'CM_PRECHECKOUT_DEBUG_MODE' => false,
-            'CM_PRECHECKOUT_DEV_MODE'   => false,
+            'CM_PRECHECKOUT_DEBUG_MODE' => defined( 'WP_DEBUG' ) && WP_DEBUG,
+            'CM_PRECHECKOUT_DEV_MODE'   => defined( 'CM_PRECHECKOUT_DEV_MODE' ) ? CM_PRECHECKOUT_DEV_MODE : false,
         );
 
         foreach ( $constants as $key => $value ) {
@@ -91,13 +118,50 @@ class Plugin {
 
 
     /**
+     * Check plugin dependencies
+     * 
+     * @since 1.0.0
+     * @return void
+     */
+    private function check_dependencies() {
+        if ( ! class_exists( 'WooCommerce' ) ) {
+            add_action( 'admin_notices', array( $this, 'woocommerce_missing_notice' ) );
+            return;
+        }
+    }
+
+
+    /**
+     * WooCommerce missing notice
+     * 
+     * @since 1.0.0
+     * @return void
+     */
+    public function woocommerce_missing_notice() {
+        ?>
+        <div class="notice notice-error">
+            <p>
+                <?php 
+                printf(
+                    esc_html__( 'O plugin %1$s requer %2$s para funcionar. Por favor, instale e ative o WooCommerce.', 'cm-precheckout' ),
+                    '<strong>Camila Maehler - Pré Checkout</strong>',
+                    '<strong>WooCommerce</strong>'
+                );
+                ?>
+            </p>
+        </div>
+        <?php
+    }
+
+
+    /**
      * Load plugin text domain
      * 
      * @since 1.0.0
      * @return void
      */
     public function load_textdomain() {
-        load_plugin_textdomain( 'cm-precheckout', false,  dirname( CM_PRECHECKOUT_BASENAME ) . '/languages' );
+        load_plugin_textdomain( 'cm-precheckout', false, dirname( CM_PRECHECKOUT_BASENAME ) . '/languages' );
     }
 
 
@@ -108,62 +172,92 @@ class Plugin {
      * @return void
      */
     public function instance_classes() {
-        if ( ! class_exists('WooCommerce') ) {
+        if ( ! class_exists( 'WooCommerce' ) ) {
             return;
         }
 
-        // get classmap from Composer
-        $classmap = include_once CM_PRECHECKOUT_PATH . 'vendor/composer/autoload_classmap.php';
+        // Get classmap from Composer
+        $classmap_file = CM_PRECHECKOUT_PATH . 'vendor/composer/autoload_classmap.php';
+        
+        if ( ! file_exists( $classmap_file ) ) {
+            return;
+        }
 
-        // ensure classmap is an array
+        $classmap = include $classmap_file;
+
+        // Ensure classmap is an array
         if ( ! is_array( $classmap ) ) {
             $classmap = array();
         }
 
-        // iterate through classmap and instance classes
-        foreach ( $classmap as $class => $path ) {
-            // skip classes not in the plugin namespace
+        // Filter and instance classes
+        $this->instance_filtered_classes( $classmap );
+    }
+
+
+    /**
+     * Filter and instance classes
+     * 
+     * @since 1.0.0
+     * @param array $classmap
+     * @return void
+     */
+    private function instance_filtered_classes( $classmap ) {
+        $filtered_classes = array_filter( $classmap, function( $class ) {
+            // Skip if not in our namespace
             if ( strpos( $class, 'MeuMouse\\Cm_Precheckout\\' ) !== 0 ) {
-                continue;
+                return false;
             }
 
-            // skip the Init class to prevent duplicate instances
-            if ( strpos( $class, 'MeuMouse\\Cm_Precheckout\\Core\\Plugin' ) !== false ) {
-                continue;
+            // Skip abstract classes, interfaces, traits and Plugin class itself
+            if ( strpos( $class, 'Abstract' ) !== false ||
+                 strpos( $class, 'Interface' ) !== false ||
+                 strpos( $class, 'Trait' ) !== false ||
+                 $class === 'MeuMouse\\Cm_Precheckout\\Core\\Plugin' ) {
+                return false;
             }
 
-            // skip specific utility classes
-            if ( $class === 'Composer\\InstalledVersions' ) {
-                continue;
-            }
+            return class_exists( $class );
+        } );
 
-            // check if class exists
-            if ( ! class_exists( $class ) ) {
-                continue;
-            }
+        foreach ( $filtered_classes as $class ) {
+            $this->safe_instance_class( $class );
+        }
+    }
 
-            // use ReflectionClass to check if class is instantiable
+
+    /**
+     * Safely instance a class
+     * 
+     * @since 1.0.0
+     * @param string $class
+     * @return void
+     */
+    private function safe_instance_class( $class ) {
+        try {
             $reflection = new \ReflectionClass( $class );
-
-            // instance only if class is not abstract, trait or interface
+            
             if ( ! $reflection->isInstantiable() ) {
-                continue;
+                return;
             }
 
-            // check if class has a constructor
             $constructor = $reflection->getConstructor();
-
-            // skip classes that require mandatory arguments in __construct
+            
+            // Only instance classes without required constructor parameters
             if ( $constructor && $constructor->getNumberOfRequiredParameters() > 0 ) {
-                continue;
+                return;
             }
 
-            // safe instance
             $instance = new $class();
-
-            // this is useful for classes that need to run some initialization code
+            
+            // Call init method if exists
             if ( method_exists( $instance, 'init' ) ) {
                 $instance->init();
+            }
+            
+        } catch ( \Exception $e ) {
+            if ( defined( 'CM_PRECHECKOUT_DEBUG_MODE' ) && CM_PRECHECKOUT_DEBUG_MODE ) {
+                error_log( 'CM Pré-Checkout: Error instancing class ' . $class . ' - ' . $e->getMessage() );
             }
         }
     }
@@ -183,23 +277,135 @@ class Plugin {
 
 
     /**
-	 * Cloning is forbidden
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function __clone() {
-		_doing_it_wrong( __FUNCTION__, esc_html__( 'Trapaceando?', 'cm-precheckout' ), '1.0.0' );
-	}
+     * Plugin activation
+     * 
+     * @since 1.0.0
+     * @return void
+     */
+    public function activate() {
+        // Set default options if not exists
+        $options = get_option( 'cm_precheckout_options', array() );
+        
+        if ( empty( $options ) ) {
+            $default_options = array(
+                'courses' => array(),
+                'stones' => array(),
+                'version' => self::VERSION,
+            );
+            
+            update_option( 'cm_precheckout_options', $default_options );
+        }
+
+        // Create database tables if needed
+        $this->create_tables();
+
+        // Clear any transients
+        $this->clear_transients();
+
+        do_action( 'cm_precheckout_activated' );
+    }
 
 
-	/**
-	 * Unserializing instances of this class is forbidden
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function __wakeup() {
-		_doing_it_wrong( __FUNCTION__, esc_html__( 'Trapaceando?', 'cm-precheckout' ), '1.0.0' );
-	}
+    /**
+     * Plugin deactivation
+     * 
+     * @since 1.0.0
+     * @return void
+     */
+    public function deactivate() {
+        // Clear transients and cache
+        $this->clear_transients();
+        Utils::clear_cache();
+
+        do_action( 'cm_precheckout_deactivated' );
+    }
+
+
+    /**
+     * Create database tables
+     * 
+     * @since 1.0.0
+     * @return void
+     */
+    private function create_tables() {
+        global $wpdb;
+        
+        $charset_collate = $wpdb->get_charset_collate();
+        
+        // Example table for storing customizations (if needed)
+        $table_name = $wpdb->prefix . 'cm_precheckout_customizations';
+        
+        $sql = "CREATE TABLE IF NOT EXISTS $table_name (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            order_item_id bigint(20) NOT NULL,
+            product_id bigint(20) NOT NULL,
+            customization_data longtext NOT NULL,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY order_item_id (order_item_id),
+            KEY product_id (product_id)
+        ) $charset_collate;";
+        
+        require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+        dbDelta( $sql );
+    }
+
+
+    /**
+     * Clear transients and cache
+     * 
+     * @since 1.0.0
+     * @return void
+     */
+    private function clear_transients() {
+        // Clear any plugin-specific transients
+        $transients = array(
+            'cm_precheckout_courses',
+            'cm_precheckout_stones',
+            'cm_precheckout_materials',
+        );
+        
+        foreach ( $transients as $transient ) {
+            delete_transient( $transient );
+        }
+        
+        // Clear object cache
+        wp_cache_delete( 'cm_precheckout_options', 'options' );
+    }
+
+
+    /**
+     * Clear cache when settings are updated
+     * 
+     * @since 1.0.0
+     * @param mixed $old_value
+     * @param mixed $new_value
+     * @return void
+     */
+    public function clear_cache_on_settings_update( $old_value, $new_value ) {
+        Utils::clear_cache();
+        $this->clear_transients();
+    }
+
+
+    /**
+     * Cloning is forbidden
+     *
+     * @since 1.0.0
+     * @return void
+     */
+    public function __clone() {
+        _doing_it_wrong( __FUNCTION__, esc_html__( 'Trapaceando?', 'cm-precheckout' ), '1.0.0' );
+    }
+
+
+    /**
+     * Unserializing instances of this class is forbidden
+     *
+     * @since 1.0.0
+     * @return void
+     */
+    public function __wakeup() {
+        _doing_it_wrong( __FUNCTION__, esc_html__( 'Trapaceando?', 'cm-precheckout' ), '1.0.0' );
+    }
 }
