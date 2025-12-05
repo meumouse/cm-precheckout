@@ -55,7 +55,7 @@ class Plugin {
         return self::$instance;
     }
 
-    
+
     /**
      * Initialize the plugin.
      *
@@ -64,13 +64,21 @@ class Plugin {
      */
     public function init() {
         // hook before plugin init
-        do_action( 'Cm_Precheckout/Before_Init' );
+        do_action('Cm_Precheckout/Before_Init');
 
         $this->define_constants();
-        $this->check_dependencies();
-        $this->load_textdomain();
-        $this->setup_hpos_compatibility();
-        $this->instance_classes();
+
+        // load text domain
+        add_action( 'init', array( $this, 'load_textdomain' ) );
+
+        // set compatibility with WooCommerce HPOS (High-Performance Order Storage)
+        add_action( 'before_woocommerce_init', array( $this, 'setup_hpos_compatibility' ) );
+
+        // check if WooCommerce is active
+        add_action( 'woocommerce_loaded', array( $this, 'check_dependencies' ) );
+
+        // instance classes after WooCommerce is loaded
+        add_action( 'woocommerce_loaded', array( $this, 'instance_classes' ), 99 );
 
         // Register activation/deactivation hooks
         register_activation_hook( CM_PRECHECKOUT_FILE, array( $this, 'activate' ) );
@@ -80,7 +88,7 @@ class Plugin {
         add_action( 'update_option_cm_precheckout_options', array( $this, 'clear_cache_on_settings_update' ), 10, 2 );
 
         // hook after plugin init
-        do_action( 'Cm_Precheckout/After_Init' );
+        do_action('Cm_Precheckout/After_Init');
     }
 
 
@@ -123,8 +131,8 @@ class Plugin {
      * @since 1.0.0
      * @return void
      */
-    private function check_dependencies() {
-        if ( ! class_exists( 'WooCommerce' ) ) {
+    public function check_dependencies() {
+        if ( ! class_exists('WooCommerce') ) {
             add_action( 'admin_notices', array( $this, 'woocommerce_missing_notice' ) );
             return;
         }
@@ -172,7 +180,7 @@ class Plugin {
      * @return void
      */
     public function instance_classes() {
-        if ( ! class_exists( 'WooCommerce' ) ) {
+        if ( ! class_exists('WooCommerce') ) {
             return;
         }
 
@@ -218,7 +226,7 @@ class Plugin {
             }
 
             return class_exists( $class );
-        } );
+        });
 
         foreach ( $filtered_classes as $class ) {
             $this->safe_instance_class( $class );
@@ -256,7 +264,7 @@ class Plugin {
             }
             
         } catch ( \Exception $e ) {
-            if ( defined( 'CM_PRECHECKOUT_DEBUG_MODE' ) && CM_PRECHECKOUT_DEBUG_MODE ) {
+            if ( defined('CM_PRECHECKOUT_DEBUG_MODE') && CM_PRECHECKOUT_DEBUG_MODE ) {
                 error_log( 'CM Pré-Checkout: Error instancing class ' . $class . ' - ' . $e->getMessage() );
             }
         }
@@ -296,9 +304,6 @@ class Plugin {
             update_option( 'cm_precheckout_options', $default_options );
         }
 
-        // Create database tables if needed
-        $this->create_tables();
-
         // Clear any transients
         $this->clear_transients();
 
@@ -318,36 +323,6 @@ class Plugin {
         Utils::clear_cache();
 
         do_action( 'cm_precheckout_deactivated' );
-    }
-
-
-    /**
-     * Create database tables
-     * 
-     * @since 1.0.0
-     * @return void
-     */
-    private function create_tables() {
-        global $wpdb;
-        
-        $charset_collate = $wpdb->get_charset_collate();
-        
-        // Example table for storing customizations (if needed)
-        $table_name = $wpdb->prefix . 'cm_precheckout_customizations';
-        
-        $sql = "CREATE TABLE IF NOT EXISTS $table_name (
-            id bigint(20) NOT NULL AUTO_INCREMENT,
-            order_item_id bigint(20) NOT NULL,
-            product_id bigint(20) NOT NULL,
-            customization_data longtext NOT NULL,
-            created_at datetime DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (id),
-            KEY order_item_id (order_item_id),
-            KEY product_id (product_id)
-        ) $charset_collate;";
-        
-        require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
-        dbDelta( $sql );
     }
 
 

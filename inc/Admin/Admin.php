@@ -7,7 +7,7 @@ namespace MeuMouse\Cm_Precheckout\Admin;
  * 
  * @since 1.0.0
  * @version 1.0.0
- * @package MeuMouse\Cm_Precheckout
+ * @package MeuMouse.com
  */
 class Admin {
 
@@ -25,6 +25,7 @@ class Admin {
         add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
     }
 
+
     /**
      * Register plugin settings
      * 
@@ -39,6 +40,7 @@ class Admin {
             array( $this, 'sanitize_options' )
         );
     }
+
 
     /**
      * Sanitize options
@@ -81,6 +83,7 @@ class Admin {
         return $sanitized;
     }
 
+
     /**
      * Add admin menu
      * 
@@ -107,6 +110,7 @@ class Admin {
             array( $this, 'stones_page' )
         );
     }
+
 
     /**
      * Courses page
@@ -285,6 +289,7 @@ class Admin {
         </div>
         <?php
     }
+
 
     /**
      * Stones page

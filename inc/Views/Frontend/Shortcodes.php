@@ -7,7 +7,7 @@ namespace MeuMouse\Cm_Precheckout\Views\Frontend;
  * 
  * @since 1.0.0
  * @version 1.0.0
- * @package MeuMouse\Cm_Precheckout
+ * @package MeuMouse.com
  */
 class Shortcodes {
 

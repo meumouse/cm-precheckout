@@ -10,7 +10,7 @@ defined('ABSPATH') || exit;
  * 
  * @since 1.0.0
  * @version 1.0.0
- * @package MeuMouse\Cm_Precheckout
+ * @package MeuMouse.com
  */
 class Product_Tab {
 
@@ -31,6 +31,7 @@ class Product_Tab {
         add_action( 'woocommerce_process_product_meta', array( $this, 'save_tab_data' ), 10, 2 );
     }
 
+
     /**
      * Add custom tab to product data
      * 
@@ -50,6 +51,7 @@ class Product_Tab {
         return $tabs;
     }
 
+    
     /**
      * Add tab content
      * 
@@ -280,6 +282,7 @@ class Product_Tab {
         </script>
         <?php
     }
+    
 
     /**
      * Save tab data

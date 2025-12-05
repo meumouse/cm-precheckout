@@ -12,7 +12,7 @@ defined('ABSPATH') || exit;
  * 
  * @since 1.0.0
  * @version 1.0.0
- * @package MeuMouse\Cm_Precheckout
+ * @package MeuMouse.com
  */
 class Ajax {
 

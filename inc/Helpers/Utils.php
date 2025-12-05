@@ -10,7 +10,7 @@ defined('ABSPATH') || exit;
  * 
  * @since 1.0.0
  * @version 1.0.0
- * @package MeuMouse\Cm_Precheckout
+ * @package MeuMouse.com
  */
 class Utils {
 
@@ -123,7 +123,7 @@ class Utils {
         // Validate course structure
         return array_filter( $courses, function( $course ) {
             return is_array( $course ) && ! empty( $course['name'] );
-        } );
+        });
     }
 
 
@@ -141,7 +141,7 @@ class Utils {
         // Validate stone structure
         return array_filter( $stones, function( $stone ) {
             return is_array( $stone ) && ! empty( $stone['name'] );
-        } );
+        });
     }
 
 
@@ -207,7 +207,7 @@ class Utils {
         
         return array_filter( $materials, function( $material ) use ( $available_materials ) {
             return isset( $available_materials[ $material ] );
-        } );
+        });
     }
 
 
