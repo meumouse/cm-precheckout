@@ -8,7 +8,7 @@
  * Author URI: 				https://meumouse.com/?utm_source=wordpress&utm_medium=plugins_list&utm_campaign=cm_precheckout
  * Version: 				1.0.0
  * WC requires at least: 	10.0.0
- * WC tested up to: 		10.3.5
+ * WC tested up to: 		10.3.6
  * Requires PHP: 			7.4
  * Tested up to:      		6.9
  * Text Domain: 			cm-precheckout

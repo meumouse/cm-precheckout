@@ -114,7 +114,7 @@ class Plugin {
             'CM_PRECHECKOUT_SLUG'       => self::SLUG,
             'CM_PRECHECKOUT_VERSION'    => self::VERSION,
             'CM_PRECHECKOUT_DEBUG_MODE' => defined( 'WP_DEBUG' ) && WP_DEBUG,
-            'CM_PRECHECKOUT_DEV_MODE'   => defined( 'CM_PRECHECKOUT_DEV_MODE' ) ? CM_PRECHECKOUT_DEV_MODE : false,
+            'CM_PRECHECKOUT_DEV_MODE'   => true,
         );
 
         foreach ( $constants as $key => $value ) {

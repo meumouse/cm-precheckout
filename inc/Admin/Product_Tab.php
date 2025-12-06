@@ -70,6 +70,7 @@ class Product_Tab {
         $materials = get_post_meta( $post->ID, '_cm_precheckout_materials', true );
         $materials = is_array( $materials ) ? $materials : array();
         
+        $enable_size_selection = get_post_meta( $post->ID, '_cm_precheckout_enable_size_selection', true );
         $size_selectors = get_post_meta( $post->ID, '_cm_precheckout_size_selectors', true );
         $size_selectors = $size_selectors ? absint( $size_selectors ) : 1;
         
@@ -105,7 +106,7 @@ class Product_Tab {
                 
                 <!-- Step 1: Materials -->
                 <div class="options_group">
-                    <h3><?php esc_html_e( 'Etapa 1: Material', 'cm-precheckout' ); ?></h3>
+                    <h4 class="fs-4"><?php esc_html_e( 'Etapa 1: Material', 'cm-precheckout' ); ?></h4>
                     
                     <?php
                     // Get available materials via filter
@@ -113,15 +114,16 @@ class Product_Tab {
                         'ouro_10k' => esc_html__( 'Ouro 10k', 'cm-precheckout' ),
                         'ouro_18k' => esc_html__( 'Ouro 18k', 'cm-precheckout' ),
                         'prata_950' => esc_html__( 'Prata 950', 'cm-precheckout' ),
-                    ) );
+                    ));
                     
                     foreach ( $available_materials as $key => $label ) :
-                        $checked = in_array( $key, $materials ) ? 'yes' : 'no';
-                    ?>
+                        $checked = in_array( $key, $materials ) ? 'yes' : 'no'; ?>
+
                         <p class="form-field">
                             <label for="_cm_precheckout_material_<?php echo esc_attr( $key ); ?>">
                                 <?php echo esc_html( $label ); ?>
                             </label>
+
                             <input type="checkbox" 
                                    id="_cm_precheckout_material_<?php echo esc_attr( $key ); ?>" 
                                    name="_cm_precheckout_materials[]" 
@@ -131,18 +133,14 @@ class Product_Tab {
                             <?php if ( $product->is_type( 'variable' ) ) : ?>
                                 <select name="_cm_precheckout_material_attribute_<?php echo esc_attr( $key ); ?>">
                                     <option value=""><?php esc_html_e( 'Vincular a atributo', 'cm-precheckout' ); ?></option>
-                                    <?php
-                                    $attributes = $product->get_attributes();
-                                    foreach ( $attributes as $attribute ) :
-                                        if ( $attribute->get_variation() ) :
-                                    ?>
-                                        <option value="<?php echo esc_attr( $attribute->get_name() ); ?>">
-                                            <?php echo esc_html( $attribute->get_name() ); ?>
-                                        </option>
-                                    <?php
-                                        endif;
-                                    endforeach;
-                                    ?>
+                                    
+                                    <?php foreach ( $product->get_attributes() as $attribute ) :
+                                        if ( $attribute->get_variation() ) : ?>
+                                            <option value="<?php echo esc_attr( $attribute->get_name() ); ?>">
+                                                <?php echo esc_html( $attribute->get_name() ); ?>
+                                            </option>
+                                        <?php endif;
+                                    endforeach; ?>
                                 </select>
                             <?php endif; ?>
                         </p>
@@ -151,39 +149,51 @@ class Product_Tab {
 
                 <!-- Step 2: Ring Sizes -->
                 <div class="options_group">
-                    <h3><?php esc_html_e( 'Etapa 2: Seleção de tamanhos de anel', 'cm-precheckout' ); ?></h3>
+                    <h4 class="fs-4"><?php esc_html_e( 'Etapa 2: Seleção de tamanhos de anel', 'cm-precheckout' ); ?></h4>
                     
                     <?php
-                    woocommerce_wp_select( array(
-                        'id'            => '_cm_precheckout_size_selectors',
-                        'label'         => esc_html__( 'Número de seletores de tamanho', 'cm-precheckout' ),
-                        'options'       => array(
-                            '1' => '1',
-                            '2' => '2',
-                            '3' => '3',
-                            '4' => '4',
-                        ),
-                        'value'         => $size_selectors,
+                    // Ativar/Desativar seleção de tamanhos
+                    woocommerce_wp_checkbox( array(
+                        'id'            => '_cm_precheckout_enable_size_selection',
+                        'label'         => esc_html__( 'Ativar seleção de tamanhos', 'cm-precheckout' ),
+                        'value'         => $enable_size_selection ? 'yes' : 'no',
                         'desc_tip'      => true,
-                        'description'   => esc_html__( 'Quantos campos de seleção de tamanho serão exibidos', 'cm-precheckout' ),
-                    ) );
+                        'description'   => esc_html__( 'Marque para ativar a seleção de tamanhos de anel', 'cm-precheckout' ),
+                    ));
                     ?>
+                    
+                    <div class="size-selection-options" style="<?php echo $enable_size_selection ? '' : 'display: none;'; ?>">
+                        <?php
+                        woocommerce_wp_select( array(
+                            'id'            => '_cm_precheckout_size_selectors',
+                            'label'         => esc_html__( 'Número de seletores de tamanho', 'cm-precheckout' ),
+                            'options'       => array(
+                                '1' => '1',
+                                '2' => '2',
+                                '3' => '3',
+                                '4' => '4',
+                            ),
+                            'value'         => $size_selectors,
+                            'desc_tip'      => true,
+                            'description'   => esc_html__( 'Quantos campos de seleção de tamanho serão exibidos', 'cm-precheckout' ),
+                        ) );
+                        ?>
+                    </div>
                 </div>
 
                 <!-- Step 3: Personalization -->
                 <div class="options_group">
-                    <h3><?php esc_html_e( 'Etapa 3: Personalização', 'cm-precheckout' ); ?></h3>
+                    <h4 class="fs-4"><?php esc_html_e( 'Etapa 3: Personalização', 'cm-precheckout' ); ?></h4>
                     
                     <?php
                     // Name engraving
                     woocommerce_wp_checkbox( array(
                         'id'            => '_cm_precheckout_enable_name_engraving',
-                        'label'         => esc_html__( 'Ativar/Desativar gravação de nomes', 'cm-precheckout' ),
+                        'label'         => esc_html__( 'Ativar gravação de nomes', 'cm-precheckout' ),
                         'value'         => $enable_name_engraving ? 'yes' : 'no',
                         'desc_tip'      => true,
                         'description'   => esc_html__( 'Permitir que os clientes gravem nomes no anel', 'cm-precheckout' ),
-                    ) );
-                    ?>
+                    )); ?>
                     
                     <div class="name-engraving-options" style="<?php echo $enable_name_engraving ? '' : 'display: none;'; ?>">
                         <?php
@@ -233,21 +243,20 @@ class Product_Tab {
                     ?>
                     
                     <div class="emblems-options" style="<?php echo $enable_emblems_sample ? '' : 'display: none;'; ?>">
-                        <?php
-                        $course_options = array( '' => esc_html__( 'Selecione um curso', 'cm-precheckout' ) );
+                        <?php $course_options = array( '' => esc_html__( 'Selecione um curso', 'cm-precheckout' ) );
+                        
                         foreach ( $courses as $index => $course ) {
                             $course_options[ $index ] = $course['name'];
                         }
                         
                         woocommerce_wp_select( array(
                             'id'            => '_cm_precheckout_default_course',
-                            'label'         => esc_html__( 'Definir curso padrão do anel', 'cm-precheckout' ),
+                            'label'         => esc_html__( 'Definir curso padrão do produto', 'cm-precheckout' ),
                             'options'       => $course_options,
                             'value'         => $default_course,
                             'desc_tip'      => true,
                             'description'   => esc_html__( 'Curso que será pré-selecionado no frontend', 'cm-precheckout' ),
-                        ) );
-                        ?>
+                        )); ?>
                     </div>
                 </div>
             </div>
@@ -261,6 +270,15 @@ class Product_Tab {
                         $( '.precheckout-options' ).show();
                     } else {
                         $( '.precheckout-options' ).hide();
+                    }
+                } );
+
+                // Toggle size selection options
+                $( '#_cm_precheckout_enable_size_selection' ).change( function() {
+                    if ( $( this ).is( ':checked' ) ) {
+                        $( '.size-selection-options' ).show();
+                    } else {
+                        $( '.size-selection-options' ).hide();
                     }
                 } );
 
@@ -305,18 +323,28 @@ class Product_Tab {
         $materials = isset( $_POST['_cm_precheckout_materials'] ) ? array_map( 'sanitize_text_field', $_POST['_cm_precheckout_materials'] ) : array();
         update_post_meta( $post_id, '_cm_precheckout_materials', $materials );
 
-        // Save size selectors
-        if ( isset( $_POST['_cm_precheckout_size_selectors'] ) ) {
+        // Save size selection activation
+        $enable_size_selection = isset( $_POST['_cm_precheckout_enable_size_selection'] ) ? 'yes' : 'no';
+        update_post_meta( $post_id, '_cm_precheckout_enable_size_selection', $enable_size_selection );
+
+        // Save size selectors (only if size selection is enabled)
+        if ( isset( $_POST['_cm_precheckout_size_selectors'] ) && $enable_size_selection === 'yes' ) {
             update_post_meta( $post_id, '_cm_precheckout_size_selectors', absint( $_POST['_cm_precheckout_size_selectors'] ) );
+        } else {
+            // Clear the value if disabled
+            delete_post_meta( $post_id, '_cm_precheckout_size_selectors' );
         }
 
         // Save name engraving
         $enable_name_engraving = isset( $_POST['_cm_precheckout_enable_name_engraving'] ) ? 'yes' : 'no';
         update_post_meta( $post_id, '_cm_precheckout_enable_name_engraving', $enable_name_engraving );
 
-        // Save name fields
-        if ( isset( $_POST['_cm_precheckout_name_fields'] ) ) {
+        // Save name fields (only if name engraving is enabled)
+        if ( isset( $_POST['_cm_precheckout_name_fields'] ) && $enable_name_engraving === 'yes' ) {
             update_post_meta( $post_id, '_cm_precheckout_name_fields', absint( $_POST['_cm_precheckout_name_fields'] ) );
+        } else {
+            // Clear the value if disabled
+            delete_post_meta( $post_id, '_cm_precheckout_name_fields' );
         }
 
         // Save course change
@@ -331,9 +359,12 @@ class Product_Tab {
         $enable_emblems_sample = isset( $_POST['_cm_precheckout_enable_emblems_sample'] ) ? 'yes' : 'no';
         update_post_meta( $post_id, '_cm_precheckout_enable_emblems_sample', $enable_emblems_sample );
 
-        // Save default course
-        if ( isset( $_POST['_cm_precheckout_default_course'] ) ) {
+        // Save default course (only if emblems sample is enabled)
+        if ( isset( $_POST['_cm_precheckout_default_course'] ) && $enable_emblems_sample === 'yes' ) {
             update_post_meta( $post_id, '_cm_precheckout_default_course', sanitize_text_field( $_POST['_cm_precheckout_default_course'] ) );
+        } else {
+            // Clear the value if disabled
+            delete_post_meta( $post_id, '_cm_precheckout_default_course' );
         }
     }
 }

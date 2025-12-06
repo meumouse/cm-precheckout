@@ -69,3 +69,49 @@
     border-color: #a00;
     color: #fff;
 }
+
+.course-item,
+.stone-item {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    padding: 20px;
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.course-item h3,
+.stone-item h3 {
+    margin-top: 0;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+.media-upload {
+    margin: 10px 0;
+}
+
+.media-preview img {
+    margin-top: 10px;
+    border: 1px solid #ddd;
+    padding: 3px;
+    background: #fff;
+}
+
+.remove-course,
+.remove-stone {
+    margin-top: 10px;
+    background: #dc3545 !important;
+    border-color: #dc3545 !important;
+    color: white !important;
+}
+
+.remove-course:hover,
+.remove-stone:hover {
+    background: #c82333 !important;
+    border-color: #bd2130 !important;
+}
+
+#add-course,
+#add-stone {
+    margin-top: 20px;
+}

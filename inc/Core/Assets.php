@@ -191,10 +191,15 @@ class Assets {
      * 
      * @since 1.0.0
      * @version 1.0.0
-     * @param string $hook
+     * @param string $hook Current admin page hook
      * @return void
      */
     public function enqueue_admin_assets( $hook ) {
+        // Remove o hook duplicado se existir
+        if ( has_action( 'admin_enqueue_scripts', array( $this, 'enqueue_settings_assets' ) ) ) {
+            remove_action( 'admin_enqueue_scripts', array( $this, 'enqueue_settings_assets' ) );
+        }
+
         // Load on product edit screen
         if ( $this->is_product_edit_screen( $hook ) ) {
             $this->enqueue_product_editor_assets();
@@ -212,7 +217,7 @@ class Assets {
      * 
      * @since 1.0.0
      * @version 1.0.0
-     * @param string $hook
+     * @param string $hook Current admin page hook
      * @return bool
      */
     private function is_product_edit_screen( $hook ) {
@@ -227,7 +232,7 @@ class Assets {
      * 
      * @since 1.0.0
      * @version 1.0.0
-     * @param string $hook
+     * @param string $hook Current admin page hook
      * @return bool
      */
     private function is_plugin_settings_page( $hook ) {
@@ -271,8 +276,10 @@ class Assets {
      * @return void
      */
     private function enqueue_settings_page_assets() {
+        // Enqueue WordPress media uploader
         wp_enqueue_media();
         
+        // Enqueue CSS
         wp_enqueue_style(
             $this->handles['admin']['css'],
             $this->get_asset_url( 'css', 'admin', 'admin' ),
@@ -281,6 +288,7 @@ class Assets {
             'all'
         );
         
+        // Enqueue JS
         wp_enqueue_script(
             $this->handles['admin']['js'],
             $this->get_asset_url( 'js', 'admin', 'admin' ),
@@ -298,7 +306,7 @@ class Assets {
      * 
      * @since 1.0.0
      * @version 1.0.0
-     * @param string $context
+     * @param string $context Context of localization
      * @return void
      */
     private function localize_admin_script( $context ) {
@@ -355,5 +363,21 @@ class Assets {
                 ),
             )
         );
+    }
+
+
+    /**
+     * Enqueue settings assets (deprecated - use enqueue_admin_assets instead)
+     * 
+     * @since 1.0.0
+     * @deprecated 1.0.0 Use enqueue_admin_assets() instead
+     * @version 1.0.0
+     * @param string $hook Current admin page hook
+     * @return void
+     */
+    public function enqueue_settings_assets( $hook ) {
+        // For backward compatibility, just call the main admin assets function
+        _deprecated_function( __METHOD__, '1.0.0', 'enqueue_admin_assets' );
+        $this->enqueue_admin_assets( $hook );
     }
 }
