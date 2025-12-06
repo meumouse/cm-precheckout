@@ -186,12 +186,12 @@ class Plugin {
 
         // Get classmap from Composer
         $classmap_file = CM_PRECHECKOUT_PATH . 'vendor/composer/autoload_classmap.php';
-        
+
         if ( ! file_exists( $classmap_file ) ) {
             return;
         }
 
-        $classmap = include $classmap_file;
+        $classmap = include_once $classmap_file;
 
         // Ensure classmap is an array
         if ( ! is_array( $classmap ) ) {
@@ -211,24 +211,42 @@ class Plugin {
      * @return void
      */
     private function instance_filtered_classes( $classmap ) {
-        $filtered_classes = array_filter( $classmap, function( $class ) {
+        $filtered_classes = array_filter( $classmap, function( $file, $class ) {
             // Skip if not in our namespace
             if ( strpos( $class, 'MeuMouse\\Cm_Precheckout\\' ) !== 0 ) {
                 return false;
             }
 
-            // Skip abstract classes, interfaces, traits and Plugin class itself
-            if ( strpos( $class, 'Abstract' ) !== false ||
-                 strpos( $class, 'Interface' ) !== false ||
-                 strpos( $class, 'Trait' ) !== false ||
-                 $class === 'MeuMouse\\Cm_Precheckout\\Core\\Plugin' ) {
+            // Skip abstract classes
+            if ( strpos( $class, 'Abstract' ) !== false ) {
+                return false;
+            }
+            
+            // Skip interfaces
+            if ( strpos( $class, 'Interface' ) !== false ) {
+                return false;
+            }
+            
+            // Skip traits
+            if ( strpos( $class, 'Trait' ) !== false ) {
+                return false;
+            }
+            
+            // Skip Plugin class itself
+            if ( $class === 'MeuMouse\\Cm_Precheckout\\Core\\Plugin' ) {
                 return false;
             }
 
-            return class_exists( $class );
-        });
+            // Check if class exists
+            if ( ! class_exists( $class ) ) {
+                return false;
+            }
+            
+            return true;
+            
+        }, ARRAY_FILTER_USE_BOTH );
 
-        foreach ( $filtered_classes as $class ) {
+        foreach ( array_keys( $filtered_classes ) as $class ) {
             $this->safe_instance_class( $class );
         }
     }

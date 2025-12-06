@@ -62,6 +62,9 @@ class Product_Tab {
     public function add_tab_content() {
         global $post;
         
+        // get product object
+        $product = wc_get_product( $post->ID );
+
         // Get saved values
         $precheckout_active = get_post_meta( $post->ID, '_cm_precheckout_active', true );
         $materials = get_post_meta( $post->ID, '_cm_precheckout_materials', true );

@@ -75,14 +75,16 @@ class Ajax {
         if ( ! check_ajax_referer( $nonce_action, 'nonce', false ) ) {
             wp_send_json_error( array( 
                 'message' => esc_html__( 'Erro de segurança. Por favor, atualize a página.', 'cm-precheckout' ) 
-            ) );
+            ));
+
             return false;
         }
         
         if ( $context === 'admin' && ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( array( 
                 'message' => esc_html__( 'Permissão negada.', 'cm-precheckout' ) 
-            ) );
+            ));
+
             return false;
         }
         
@@ -105,7 +107,7 @@ class Ajax {
         if ( ! $product_id ) {
             wp_send_json_error( array( 
                 'message' => esc_html__( 'ID do produto não fornecido.', 'cm-precheckout' ) 
-            ) );
+            ));
         }
 
         $product = wc_get_product( $product_id );
@@ -113,14 +115,14 @@ class Ajax {
         if ( ! $product ) {
             wp_send_json_error( array( 
                 'message' => esc_html__( 'Produto não encontrado.', 'cm-precheckout' ) 
-            ) );
+            ));
         }
 
         // Check if pre-checkout is enabled
         if ( ! Utils::is_precheckout_enabled( $product_id ) ) {
             wp_send_json_error( array( 
                 'message' => esc_html__( 'Pré-checkout não está ativo para este produto.', 'cm-precheckout' ) 
-            ) );
+            ));
         }
 
         // Format materials using Utils
@@ -197,7 +199,7 @@ class Ajax {
         wp_send_json_success( array(
             'courses' => $formatted_courses,
             'count' => count( $formatted_courses ),
-        ) );
+        ));
     }
 
 
@@ -226,7 +228,7 @@ class Ajax {
         wp_send_json_success( array(
             'stones' => $formatted_stones,
             'count' => count( $formatted_stones ),
-        ) );
+        ));
     }
 
 
@@ -246,7 +248,7 @@ class Ajax {
         if ( ! $product_id ) {
             wp_send_json_error( array( 
                 'message' => esc_html__( 'ID do produto não fornecido.', 'cm-precheckout' ) 
-            ) );
+            ));
         }
 
         $product = wc_get_product( $product_id );
@@ -254,7 +256,7 @@ class Ajax {
         if ( ! $product ) {
             wp_send_json_error( array( 
                 'message' => esc_html__( 'Produto não encontrado.', 'cm-precheckout' ) 
-            ) );
+            ));
         }
 
         // Validate quantity
@@ -291,17 +293,17 @@ class Ajax {
                     'cart_item_key' => $cart_item_key,
                     'cart_url' => wc_get_cart_url(),
                     'checkout_url' => wc_get_checkout_url(),
-                ) );
+                ));
             } else {
                 wp_send_json_error( array( 
                     'message' => esc_html__( 'Erro ao adicionar produto ao carrinho.', 'cm-precheckout' ) 
-                ) );
+                ));
             }
             
         } catch ( \Exception $e ) {
             wp_send_json_error( array( 
                 'message' => $e->getMessage() 
-            ) );
+            ));
         }
     }
 
@@ -325,7 +327,7 @@ class Ajax {
                     esc_html__( 'Quantidade mínima é %d.', 'cm-precheckout' ), 
                     $min_quantity 
                 )
-            ) );
+            ));
         }
         
         if ( $max_quantity > 0 && $quantity > $max_quantity ) {
@@ -334,7 +336,7 @@ class Ajax {
                     esc_html__( 'Quantidade máxima é %d.', 'cm-precheckout' ), 
                     $max_quantity 
                 )
-            ) );
+            ));
         }
     }
 
@@ -360,7 +362,7 @@ class Ajax {
         if ( isset( $customization['names'] ) && ! empty( $customization['names'] ) ) {
             $engraving_price = get_post_meta( $product_id, '_cm_precheckout_engraving_price', true );
             if ( $engraving_price ) {
-                $additional_price += floatval( $engraving_price ) * count( array_filter( $customization['names'] ) );
+                $additional_price += floatval( $engraving_price ) * count( array_filter( $customization['names'] ));
             }
         }
         
@@ -418,14 +420,13 @@ class Ajax {
         if ( empty( $order ) ) {
             wp_send_json_error( array( 
                 'message' => esc_html__( 'Nenhuma ordem fornecida.', 'cm-precheckout' ) 
-            ) );
+            ));
         }
 
-        $options = get_option( 'cm_precheckout_options', array() );
+        $options = get_option( 'cm_precheckout_options', array());
         $courses = isset( $options['courses'] ) ? $options['courses'] : array();
-        
-        // Reorder courses
         $reordered_courses = array();
+
         foreach ( $order as $index ) {
             if ( isset( $courses[ $index ] ) ) {
                 $reordered_courses[] = $courses[ $index ];
@@ -440,7 +441,7 @@ class Ajax {
         
         wp_send_json_success( array(
             'message' => esc_html__( 'Ordem dos cursos salva com sucesso!', 'cm-precheckout' ),
-        ) );
+        ));
     }
 
 
@@ -459,14 +460,13 @@ class Ajax {
         if ( empty( $order ) ) {
             wp_send_json_error( array( 
                 'message' => esc_html__( 'Nenhuma ordem fornecida.', 'cm-precheckout' ) 
-            ) );
+            ));
         }
 
-        $options = get_option( 'cm_precheckout_options', array() );
+        $options = get_option( 'cm_precheckout_options', array());
         $stones = isset( $options['stones'] ) ? $options['stones'] : array();
-        
-        // Reorder stones
         $reordered_stones = array();
+
         foreach ( $order as $index ) {
             if ( isset( $stones[ $index ] ) ) {
                 $reordered_stones[] = $stones[ $index ];
@@ -481,7 +481,7 @@ class Ajax {
         
         wp_send_json_success( array(
             'message' => esc_html__( 'Ordem das pedras salva com sucesso!', 'cm-precheckout' ),
-        ) );
+        ));
     }
 
 
@@ -527,11 +527,11 @@ class Ajax {
                 'url' => $movefile['url'],
                 'thumbnail' => wp_get_attachment_image_url( $attach_id, 'thumbnail' ),
                 'message' => esc_html__( 'Imagem enviada com sucesso!', 'cm-precheckout' ),
-            ) );
+            ));
         } else {
             wp_send_json_error( array( 
                 'message' => $movefile['error'] 
-            ) );
+            ));
         }
     }
 
@@ -551,7 +551,7 @@ class Ajax {
         if ( ! $attachment_id ) {
             wp_send_json_error( array( 
                 'message' => esc_html__( 'ID do anexo não fornecido.', 'cm-precheckout' ) 
-            ) );
+            ));
         }
 
         $deleted = wp_delete_attachment( $attachment_id, true );
@@ -559,11 +559,11 @@ class Ajax {
         if ( $deleted ) {
             wp_send_json_success( array(
                 'message' => esc_html__( 'Imagem deletada com sucesso!', 'cm-precheckout' ),
-            ) );
+            ));
         } else {
             wp_send_json_error( array( 
                 'message' => esc_html__( 'Erro ao deletar imagem.', 'cm-precheckout' ) 
-            ) );
+            ));
         }
     }
 }

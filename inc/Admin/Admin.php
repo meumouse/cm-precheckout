@@ -19,7 +19,7 @@ class Admin {
      */
     public function __construct() {
         // Register settings
-        add_action( 'admin_init', array( $this, 'register_settings' ) );
+    //    add_action( 'admin_init', array( $this, 'register_settings' ) );
 
         // Add admin menu
         add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
@@ -94,7 +94,7 @@ class Admin {
     public function add_admin_menu() {
         add_submenu_page(
             'woocommerce',
-            esc_html__( 'Pré Checkout - Cursos', 'cm-precheckout' ),
+            esc_html__( 'Cursos', 'cm-precheckout' ),
             esc_html__( 'Pré Checkout', 'cm-precheckout' ),
             'manage_options',
             'cm-precheckout-courses',
@@ -103,8 +103,8 @@ class Admin {
 
         add_submenu_page(
             'woocommerce',
-            esc_html__( 'Pré Checkout - Pedras', 'cm-precheckout' ),
-            esc_html__( 'Pré Checkout Pedras', 'cm-precheckout' ),
+            esc_html__( 'Pedras', 'cm-precheckout' ),
+            esc_html__( 'Pedras', 'cm-precheckout' ),
             'manage_options',
             'cm-precheckout-stones',
             array( $this, 'stones_page' )
