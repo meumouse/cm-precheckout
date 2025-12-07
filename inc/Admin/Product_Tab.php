@@ -9,7 +9,6 @@ defined('ABSPATH') || exit;
  * Product Tab for Pre-checkout Settings
  * 
  * @since 1.0.0
- * @version 1.1.0
  * @package MeuMouse.com
  */
 class Product_Tab {
@@ -17,7 +16,7 @@ class Product_Tab {
     /**
      * Options library instance
      * 
-     * @since 1.1.0
+     * @since 1.0.0
      * @var Options_Library
      */
     private $options_library;
@@ -26,7 +25,6 @@ class Product_Tab {
      * Constructor
      * 
      * @since 1.0.0
-     * @version 1.1.0
      */
     public function __construct() {
         $this->options_library = new Options_Library();
@@ -39,9 +37,6 @@ class Product_Tab {
 
         // Save tab data
         add_action('woocommerce_process_product_meta', array($this, 'save_tab_data'), 10, 2);
-        
-        // Add AJAX handlers
-        add_action('wp_ajax_cm_precheckout_save_product_steps', array($this, 'save_product_steps'));
     }
 
 
@@ -69,7 +64,6 @@ class Product_Tab {
      * Add tab content
      * 
      * @since 1.0.0
-     * @version 1.1.0
      * @return void
      */
     public function add_tab_content() {
@@ -77,11 +71,11 @@ class Product_Tab {
         
         $product = wc_get_product($post->ID);
         $precheckout_active = get_post_meta($post->ID, '_cm_precheckout_active', true);
-        $product_steps = get_post_meta($post->ID, '_cm_precheckout_steps', true);
-        $product_steps = is_array($product_steps) ? $product_steps : array();
-        
-        // Get enabled options from library
         $library_options = $this->options_library->get_enabled_options();
+        $library_options = is_array($library_options) ? $library_options : array();
+
+        $product_steps_data = get_post_meta($post->ID, '_cm_precheckout_steps_data', true);
+        $product_steps_data = is_array($product_steps_data) ? $product_steps_data : $this->build_default_steps_data($post->ID, $library_options);
         
         // Get saved material configurations
         $materials_config = get_post_meta($post->ID, '_cm_precheckout_materials_config', true);
@@ -109,46 +103,14 @@ class Product_Tab {
                     <p class="description"><?php esc_html_e('Arraste e solte para reordenar as etapas. Clique em uma etapa para configurar.', 'cm-precheckout'); ?></p>
                     
                     <div id="product-steps-container" class="product-steps-container">
-                        <?php
-                        // Display saved steps or default enabled steps
-                        if (!empty($product_steps)) {
-                            foreach ($product_steps as $step_key) {
-                                if (isset($library_options[$step_key])) {
-                                    $this->render_step_item($library_options[$step_key], $post->ID);
-                                }
+                        <?php if ( ! empty( $product_steps_data ) ) :
+                            foreach ( $product_steps_data as $step ) {
+                                $this->render_step_container( $step, $library_options );
                             }
-                        } else {
-                            // Display all enabled options
-                            foreach ($library_options as $option) {
-                                $this->render_step_item($option, $post->ID);
-                            }
-                        }
-                        ?>
+                        endif; ?>
                     </div>
                     
-                    <div class="available-steps">
-                        <h5><?php esc_html_e('Etapas disponíveis para adicionar:', 'cm-precheckout'); ?></h5>
-                        <div class="steps-list">
-                            <?php
-                            // Show disabled options
-                            $all_options = $this->options_library->get_library_options();
-                            $enabled_keys = array_keys($library_options);
-                            
-                            foreach ($all_options as $key => $option) {
-                                if (!in_array($key, $enabled_keys) && $key !== 'summary') {
-                                    echo '<div class="available-step" data-key="' . esc_attr($key) . '">';
-                                    echo '<span class="dashicons ' . esc_attr($option['icon']) . '"></span>';
-                                    echo '<span>' . esc_html($option['name']) . '</span>';
-                                    echo '<button type="button" class="button button-small add-step">' . esc_html__('Adicionar', 'cm-precheckout') . '</button>';
-                                    echo '</div>';
-                                }
-                            }
-                            ?>
-                        </div>
-                    </div>
-                    
-                    <input type="hidden" id="product_steps_order" name="_cm_precheckout_steps_order" 
-                           value="<?php echo esc_attr(implode(',', array_keys($product_steps ?: $library_options))); ?>">
+                    <input type="hidden" id="product_steps_data" name="_cm_precheckout_steps_data" value="<?php echo wp_json_encode( $product_steps_data ); ?>">
                 </div>
                 
                 <!-- Materials Configuration Modal -->
@@ -174,241 +136,67 @@ class Product_Tab {
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-        
-        <script type="text/javascript">
-            jQuery(document).ready(function($) {
-                // Toggle precheckout options
-                $('#_cm_precheckout_active').change(function() {
-                    if ($(this).is(':checked')) {
-                        $('.precheckout-options').show();
-                    } else {
-                        $('.precheckout-options').hide();
-                    }
-                });
+                <!-- Add Step Modal -->
+                <div id="cm-precheckout-step-modal" class="cm-modal" style="display: none;">
+                    <div class="cm-modal-overlay"></div>
+                    <div class="cm-modal-content">
+                        <div class="cm-modal-header">
+                            <h3><?php esc_html_e('Adicionar nova etapa', 'cm-precheckout'); ?></h3>
+                            <button type="button" class="cm-modal-close">&times;</button>
+                        </div>
+                        <div class="cm-modal-body">
+                            <p>
+                                <label for="cm-precheckout-step-name"><?php esc_html_e('Nome da etapa', 'cm-precheckout'); ?></label>
+                                <input type="text" id="cm-precheckout-step-name" class="widefat" placeholder="<?php esc_attr_e('Ex: Escolha do material', 'cm-precheckout'); ?>">
+                            </p>
+                            <p>
+                                <label for="cm-precheckout-step-icon"><?php esc_html_e('Classe do ícone (opcional)', 'cm-precheckout'); ?></label>
+                                <input type="text" id="cm-precheckout-step-icon" class="widefat" placeholder="dashicons-admin-generic">
+                                <span class="description"><?php esc_html_e('Use uma classe Dashicon para exibir um ícone.', 'cm-precheckout'); ?></span>
+                            </p>
+                        </div>
+                        <div class="cm-modal-footer">
+                            <button type="button" class="button button-secondary cm-modal-close"><?php esc_html_e('Cancelar', 'cm-precheckout'); ?></button>
+                            <button type="button" class="button button-primary" id="cm-precheckout-save-step"><?php esc_html_e('Adicionar etapa', 'cm-precheckout'); ?></button>
+                        </div>
+                    </div>
+                </div>
 
-                // Make steps sortable
-                $('#product-steps-container').sortable({
-                    handle: '.step-handle',
-                    update: function(event, ui) {
-                        var order = [];
-                        $('#product-steps-container .step-item').each(function() {
-                            order.push($(this).data('key'));
-                        });
-                        $('#product_steps_order').val(order.join(','));
-                    }
-                }).disableSelection();
-
-                // Add step from available steps
-                $('.add-step').click(function() {
-                    var $step = $(this).closest('.available-step');
-                    var key = $step.data('key');
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'cm_precheckout_get_step_template',
-                            nonce: '<?php echo wp_create_nonce("cm_precheckout_admin_nonce"); ?>',
-                            step_key: key,
-                            product_id: <?php echo $post->ID; ?>
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                $('#product-steps-container').append(response.data.html);
-                                $step.remove();
-                                
-                                // Update order
-                                var order = [];
-                                $('#product-steps-container .step-item').each(function() {
-                                    order.push($(this).data('key'));
-                                });
-                                $('#product_steps_order').val(order.join(','));
-                            }
-                        }
-                    });
-                });
-
-                // Remove step
-                $(document).on('click', '.remove-step', function() {
-                    var $step = $(this).closest('.step-item');
-                    var key = $step.data('key');
-                    var name = $step.find('.step-title').text();
-                    
-                    if (confirm('<?php esc_html_e("Tem certeza que deseja remover esta etapa?", "cm-precheckout"); ?>')) {
-                        // Move to available steps
-                        var $availableStep = $('<div class="available-step" data-key="' + key + '">' +
-                            '<span class="dashicons"></span>' +
-                            '<span>' + name + '</span>' +
-                            '<button type="button" class="button button-small add-step"><?php esc_html_e("Adicionar", "cm-precheckout"); ?></button>' +
-                            '</div>');
-                        
-                        $('.available-steps .steps-list').append($availableStep);
-                        $step.remove();
-                        
-                        // Update order
-                        var order = [];
-                        $('#product-steps-container .step-item').each(function() {
-                            order.push($(this).data('key'));
-                        });
-                        $('#product_steps_order').val(order.join(','));
-                    }
-                });
-
-                // Configure materials
-                $(document).on('click', '.configure-materials', function() {
-                    var productId = <?php echo $post->ID; ?>;
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'cm_precheckout_get_materials_config',
-                            nonce: '<?php echo wp_create_nonce("cm_precheckout_admin_nonce"); ?>',
-                            product_id: productId
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                $('#materials-config-container').html(response.data.html);
-                                $('#materials-config-modal').show();
-                            }
-                        }
-                    });
-                });
-
-                // Save materials configuration
-                $(document).on('click', '.save-materials-config', function() {
-                    var formData = $('#materials-config-form').serialize();
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: formData + '&action=cm_precheckout_save_materials_config&product_id=<?php echo $post->ID; ?>&nonce=<?php echo wp_create_nonce("cm_precheckout_admin_nonce"); ?>',
-                        success: function(response) {
-                            if (response.success) {
-                                alert('<?php esc_html_e("Configurações salvas com sucesso!", "cm-precheckout"); ?>');
-                                $('#materials-config-modal').hide();
-                            }
-                        }
-                    });
-                });
-
-                // Close modal
-                $('.cm-modal-close, .cm-modal-overlay').click(function() {
-                    $('.cm-modal').hide();
-                });
-
-                // Prevent modal close when clicking inside
-                $('.cm-modal-content').click(function(e) {
-                    e.stopPropagation();
-                });
-            });
-        </script>
-        
-        <style>
-            .product-steps-container {
-                margin: 15px 0;
-                padding: 15px;
-                background: #f9f9f9;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                min-height: 100px;
-            }
-            .step-item {
-                background: #fff;
-                border: 1px solid #ccd0d4;
-                border-radius: 4px;
-                padding: 10px;
-                margin-bottom: 10px;
-                display: flex;
-                align-items: center;
-                cursor: move;
-            }
-            .step-handle {
-                margin-right: 10px;
-                color: #a0a5aa;
-                cursor: move;
-            }
-            .step-icon {
-                margin-right: 10px;
-                color: #0073aa;
-            }
-            .step-content {
-                flex: 1;
-            }
-            .step-title {
-                margin: 0 0 5px 0;
-                font-weight: 600;
-            }
-            .step-description {
-                margin: 0;
-                font-size: 12px;
-                color: #666;
-            }
-            .step-actions {
-                margin-left: 10px;
-            }
-            .available-steps {
-                margin-top: 20px;
-            }
-            .available-steps h5 {
-                margin-bottom: 10px;
-            }
-            .steps-list {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 10px;
-            }
-            .available-step {
-                background: #fff;
-                border: 1px dashed #ccd0d4;
-                border-radius: 4px;
-                padding: 8px 12px;
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }
-            .available-step .dashicons {
-                color: #72777c;
-            }
-        </style>
-        <?php
-    }
-    
-    /**
-     * Render step item
-     * 
-     * @since 1.1.0
-     * @version 1.1.0
-     * @param array $option
-     * @param int $product_id
-     * @return void
-     */
-    private function render_step_item($option, $product_id) {
-        $config = isset($option['config']) ? $option['config'] : array();
-        ?>
-        <div class="step-item" data-key="<?php echo esc_attr($option['key']); ?>">
-            <span class="dashicons dashicons-move step-handle"></span>
-            <span class="dashicons <?php echo esc_attr($option['icon']); ?> step-icon"></span>
-            <div class="step-content">
-                <h4 class="step-title"><?php echo esc_html($option['name']); ?></h4>
-                <p class="step-description">
-                    <?php 
-                    echo esc_html__('Obrigatório:', 'cm-precheckout') . ' ';
-                    echo $config['required'] ? esc_html__('Sim', 'cm-precheckout') : esc_html__('Não', 'cm-precheckout');
-                    ?>
-                </p>
-            </div>
-            <div class="step-actions">
-                <?php if ($option['key'] === 'material_selection'): ?>
-                    <button type="button" class="button button-small configure-materials">
-                        <?php esc_html_e('Configurar', 'cm-precheckout'); ?>
-                    </button>
-                <?php endif; ?>
-                <button type="button" class="button button-small remove-step">
-                    <?php esc_html_e('Remover', 'cm-precheckout'); ?>
-                </button>
+                <!-- Action Modal -->
+                <div id="cm-precheckout-action-modal" class="cm-modal" style="display: none;">
+                    <div class="cm-modal-overlay"></div>
+                    <div class="cm-modal-content">
+                        <div class="cm-modal-header">
+                            <h3 id="cm-precheckout-action-modal-title"><?php esc_html_e('Configurar ação', 'cm-precheckout'); ?></h3>
+                            <button type="button" class="cm-modal-close">&times;</button>
+                        </div>
+                        <div class="cm-modal-body">
+                            <p>
+                                <label for="cm-precheckout-action-key"><?php esc_html_e('Opção da biblioteca', 'cm-precheckout'); ?></label>
+                                <select id="cm-precheckout-action-key" class="widefat"></select>
+                            </p>
+                            <p>
+                                <label>
+                                    <input type="checkbox" id="cm-precheckout-action-required">
+                                    <?php esc_html_e('Obrigatório', 'cm-precheckout'); ?>
+                                </label>
+                            </p>
+                            <p>
+                                <label for="cm-precheckout-action-display-name"><?php esc_html_e('Nome de exibição', 'cm-precheckout'); ?></label>
+                                <input type="text" id="cm-precheckout-action-display-name" class="widefat">
+                            </p>
+                            <p>
+                                <label for="cm-precheckout-action-message"><?php esc_html_e('Mensagem adicional', 'cm-precheckout'); ?></label>
+                                <textarea id="cm-precheckout-action-message" class="widefat" rows="3"></textarea>
+                                <span class="description"><?php esc_html_e('Esta mensagem será exibida como tooltip no frontend.', 'cm-precheckout'); ?></span>
+                            </p>
+                        </div>
+                        <div class="cm-modal-footer">
+                            <button type="button" class="button button-secondary cm-modal-close"><?php esc_html_e('Cancelar', 'cm-precheckout'); ?></button>
+                            <button type="button" class="button button-primary" id="cm-precheckout-save-action"><?php esc_html_e('Salvar ação', 'cm-precheckout'); ?></button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <?php
@@ -419,8 +207,7 @@ class Product_Tab {
      * Save tab data
      * 
      * @since 1.0.0
-     * @version 1.1.0
-     * @param int $post_id
+     * @param int $post_id | Post ID
      * @param object $post
      * @return void
      */
@@ -429,10 +216,53 @@ class Product_Tab {
         $active = isset($_POST['_cm_precheckout_active']) ? 'yes' : 'no';
         update_post_meta($post_id, '_cm_precheckout_active', $active);
 
-        // Save steps order
-        if (isset($_POST['_cm_precheckout_steps_order'])) {
-            $steps = explode(',', sanitize_text_field($_POST['_cm_precheckout_steps_order']));
-            update_post_meta($post_id, '_cm_precheckout_steps', $steps);
+        // Save steps data
+        if (isset($_POST['_cm_precheckout_steps_data'])) {
+            $decoded_steps = json_decode(stripslashes($_POST['_cm_precheckout_steps_data']), true);
+            $sanitized_steps = array();
+            $steps_order = array();
+
+            if (is_array($decoded_steps)) {
+                foreach ($decoded_steps as $step) {
+                    $step_id = sanitize_key($step['id'] ?? '');
+                    $step_name = sanitize_text_field($step['name'] ?? '');
+                    $step_icon = sanitize_text_field($step['icon'] ?? '');
+
+                    if (empty($step_id) || empty($step_name)) {
+                        continue;
+                    }
+
+                    $actions = array();
+                    if (!empty($step['actions']) && is_array($step['actions'])) {
+                        foreach ($step['actions'] as $action) {
+                            $action_key = sanitize_text_field($action['key'] ?? '');
+
+                            if (empty($action_key)) {
+                                continue;
+                            }
+
+                            $actions[] = array(
+                                'key' => $action_key,
+                                'required' => !empty($action['required']),
+                                'display_name' => sanitize_text_field($action['display_name'] ?? ''),
+                                'additional_message' => sanitize_textarea_field($action['additional_message'] ?? ''),
+                            );
+
+                            $steps_order[] = $action_key;
+                        }
+                    }
+
+                    $sanitized_steps[] = array(
+                        'id' => $step_id,
+                        'name' => $step_name,
+                        'icon' => $step_icon,
+                        'actions' => $actions,
+                    );
+                }
+            }
+
+            update_post_meta($post_id, '_cm_precheckout_steps_data', $sanitized_steps);
+            update_post_meta($post_id, '_cm_precheckout_steps', array_values(array_unique($steps_order)));
         }
 
         // Save material configurations if they exist
@@ -523,5 +353,137 @@ class Product_Tab {
                 'message' => esc_html__('Dados inválidos.', 'cm-precheckout')
             ));
         }
+    }
+
+    /**
+     * Build default steps data based on legacy configuration
+     *
+     * @since 1.0.0
+     * @param int   $product_id   Product ID.
+     * @param array $library_options Library options.
+     * @return array
+     */
+    private function build_default_steps_data($product_id, $library_options) {
+        $stored_steps = get_post_meta($product_id, '_cm_precheckout_steps', true);
+        $stored_steps = is_array($stored_steps) ? $stored_steps : array();
+
+        if (empty($stored_steps)) {
+            $stored_steps = array_keys($library_options);
+        }
+
+        $steps_data = array();
+
+        foreach ($stored_steps as $index => $step_key) {
+            if (!isset($library_options[$step_key])) {
+                continue;
+            }
+
+            $option = $library_options[$step_key];
+            $steps_data[] = array(
+                'id' => 'step_' . ($index + 1),
+                'name' => $option['name'],
+                'icon' => $option['icon'],
+                'actions' => array(
+                    array(
+                        'key' => $option['key'],
+                        'required' => !empty($option['config']['required']),
+                        'display_name' => $option['config']['display_name'] ?? $option['name'],
+                        'additional_message' => $option['config']['additional_message'] ?? '',
+                    ),
+                ),
+            );
+        }
+
+        return $steps_data;
+    }
+
+
+    /**
+     * Render step container
+     *
+     * @since 1.0.0
+     * @param array $step Step data.
+     * @param array $library_options Options library list.
+     * @return void
+     */
+    private function render_step_container($step, $library_options) {
+        $step_id = isset($step['id']) ? $step['id'] : uniqid('step_');
+        $step_name = isset($step['name']) ? $step['name'] : '';
+        $step_icon = isset($step['icon']) ? $step['icon'] : '';
+        $actions = isset($step['actions']) && is_array($step['actions']) ? $step['actions'] : array(); ?>
+
+        <div class="cm-precheckout-step" data-step-id="<?php echo esc_attr($step_id); ?>" data-step-name="<?php echo esc_attr($step_name); ?>" data-step-icon="<?php echo esc_attr($step_icon); ?>">
+            <div class="cm-precheckout-step__header">
+                <span class="dashicons dashicons-move cm-precheckout-step__handle"></span>
+                <div class="cm-precheckout-step__title">
+                    <?php if (!empty($step_icon)): ?>
+                        <span class="dashicons <?php echo esc_attr($step_icon); ?> cm-precheckout-step__icon"></span>
+                    <?php endif; ?>
+                    <strong class="cm-precheckout-step__name"><?php echo esc_html($step_name); ?></strong>
+                </div>
+                <div class="cm-precheckout-step__actions">
+                    <button type="button" class="button button-secondary cm-precheckout-add-action"><?php esc_html_e('Adicionar ação', 'cm-precheckout'); ?></button>
+                    <button type="button" class="button button-link-delete cm-precheckout-remove-step"><?php esc_html_e('Remover etapa', 'cm-precheckout'); ?></button>
+                </div>
+            </div>
+            <div class="cm-precheckout-step__body">
+                <div class="cm-precheckout-step__actions-list">
+                    <?php
+                    if (!empty($actions)) {
+                        foreach ($actions as $action) {
+                            $this->render_step_action($action, $library_options);
+                        }
+                    }
+                    ?>
+                </div>
+            </div>
+        </div>
+        <?php
+    }
+
+
+    /**
+     * Render action item
+     *
+     * @since 1.0.0
+     * @param array $action Action data.
+     * @param array $library_options Options library list.
+     * @return void
+     */
+    private function render_step_action($action, $library_options) {
+        $action_key = isset($action['key']) ? $action['key'] : '';
+
+        if (empty($action_key) || !isset($library_options[$action_key])) {
+            return;
+        }
+
+        $library_option = $library_options[$action_key];
+        $display_name = $action['display_name'] ?? $library_option['name'];
+        $is_required = !empty($action['required']);
+        $additional_message = $action['additional_message'] ?? '';
+        ?>
+        <div class="cm-precheckout-action" data-action-key="<?php echo esc_attr($action_key); ?>" data-action-required="<?php echo esc_attr($is_required ? '1' : '0'); ?>" data-action-display-name="<?php echo esc_attr($display_name); ?>" data-action-message="<?php echo esc_attr($additional_message); ?>">
+            <div class="cm-precheckout-action__info">
+                <span class="dashicons <?php echo esc_attr($library_option['icon']); ?>"></span>
+                <div>
+                    <p class="cm-precheckout-action__name"><?php echo esc_html($display_name); ?></p>
+                    <p class="cm-precheckout-action__meta">
+                        <?php
+                        echo esc_html($library_option['name']);
+                        echo ' · ';
+                        echo $is_required ? esc_html__('Obrigatório', 'cm-precheckout') : esc_html__('Opcional', 'cm-precheckout');
+                        ?>
+                    </p>
+                </div>
+            </div>
+            <div class="cm-precheckout-action__controls">
+                <?php if ('material_selection' === $action_key) : ?>
+                    <button type="button" class="button configure-materials"><?php esc_html_e('Configurar', 'cm-precheckout'); ?></button>
+                <?php endif; ?>
+                <button type="button" class="button button-secondary cm-precheckout-edit-action"><?php esc_html_e('Editar ações', 'cm-precheckout'); ?></button>
+                <button type="button" class="button cm-precheckout-remove-action"><?php esc_html_e('Remover', 'cm-precheckout'); ?></button>
+            </div>
+        </div>
+        <?php
     }
 }
