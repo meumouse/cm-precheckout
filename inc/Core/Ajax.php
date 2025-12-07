@@ -585,10 +585,36 @@ class Ajax {
         $option = $options_library->get_option_by_key($step_key);
         
         if ($option) {
-            $html = $this->render_step_template($option, $product_id);
+            ob_start();
+            ?>
+            <div class="step-item" data-key="<?php echo esc_attr($option['key']); ?>">
+                <span class="dashicons dashicons-move step-handle"></span>
+                <span class="dashicons <?php echo esc_attr($option['icon']); ?> step-icon"></span>
+                <div class="step-content">
+                    <h4 class="step-title"><?php echo esc_html($option['name']); ?></h4>
+                    <p class="step-description">
+                        <?php 
+                        $config = isset($option['config']) ? $option['config'] : array();
+                        echo esc_html__('Obrigatório:', 'cm-precheckout') . ' ';
+                        echo $config['required'] ? esc_html__('Sim', 'cm-precheckout') : esc_html__('Não', 'cm-precheckout');
+                        ?>
+                    </p>
+                </div>
+                <div class="step-actions">
+                    <?php if ($option['key'] === 'material_selection'): ?>
+                        <button type="button" class="button button-small configure-materials">
+                            <?php esc_html_e('Configurar', 'cm-precheckout'); ?>
+                        </button>
+                    <?php endif; ?>
+                    <button type="button" class="button button-small remove-step">
+                        <?php esc_html_e('Remover', 'cm-precheckout'); ?>
+                    </button>
+                </div>
+            </div>
+            <?php
             
             wp_send_json_success(array(
-                'html' => $html
+                'html' => ob_get_clean()
             ));
         } else {
             wp_send_json_error(array(
@@ -597,6 +623,39 @@ class Ajax {
         }
     }
 
+
+    /**
+     * Set default options
+     * 
+     * @since 1.1.0
+     * @version 1.1.0
+     * @return void
+     */
+    public function set_default_options() {
+        $this->verify_request('admin');
+
+        $type = sanitize_text_field($_POST['type']);
+        
+        $default_options = new Default_Options();
+        $defaults = $default_options->get_defaults($type);
+        
+        $options = get_option('cm_precheckout_options', array());
+        $options[$type] = $defaults;
+        
+        update_option('cm_precheckout_options', $options);
+        
+        // Clear cache
+        Utils::clear_cache();
+        
+        wp_send_json_success(array(
+            'message' => sprintf(
+                esc_html__('%s padrão aplicados com sucesso!', 'cm-precheckout'),
+                $type === 'courses' ? esc_html__('Cursos', 'cm-precheckout') : esc_html__('Pedras', 'cm-precheckout')
+            )
+        ));
+    }
+
+    
     /**
      * Render step template HTML
      * 
