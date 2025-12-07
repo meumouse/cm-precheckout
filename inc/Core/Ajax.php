@@ -3,6 +3,7 @@
 namespace MeuMouse\Cm_Precheckout\Core;
 
 use MeuMouse\Cm_Precheckout\Helpers\Utils;
+use MeuMouse\Cm_Precheckout\Admin\Options_Library;
 
 // Exit if accessed directly.
 defined('ABSPATH') || exit;
@@ -30,7 +31,6 @@ class Ajax {
      * Initialize AJAX hooks
      * 
      * @since 1.0.0
-     * @version 1.0.0
      * @return void
      */
     private function init_hooks() {
@@ -53,6 +53,14 @@ class Ajax {
             'save_stone_order',
             'upload_image',
             'delete_image',
+            'save_product_steps',
+            'get_step_template',
+            'get_materials_config',
+            'save_materials_config',
+            'set_default_options',
+            'toggle_option',
+            'create_step_container',
+            'get_step_action',
         );
         
         foreach ( $admin_actions as $action ) {
@@ -65,11 +73,11 @@ class Ajax {
      * Verify AJAX request
      * 
      * @since 1.0.0
-     * @version 1.0.0
      * @param string $context 'frontend' or 'admin'
+     * @param string $capability Capability required for admin context.
      * @return bool
      */
-    private function verify_request( $context = 'frontend' ) {
+    private function verify_request( $context = 'frontend', $capability = 'manage_options' ) {
         $nonce_action = $context === 'admin' ? 'cm_precheckout_admin_nonce' : 'cm_precheckout_nonce';
         
         if ( ! check_ajax_referer( $nonce_action, 'nonce', false ) ) {
@@ -80,7 +88,7 @@ class Ajax {
             return false;
         }
         
-        if ( $context === 'admin' && ! current_user_can( 'manage_options' ) ) {
+        if ( $context === 'admin' && ! current_user_can(  $capability ) ) {
             wp_send_json_error( array( 
                 'message' => esc_html__( 'Permissão negada.', 'cm-precheckout' ) 
             ));
@@ -569,14 +577,83 @@ class Ajax {
 
 
     /**
+     * Save product steps data via AJAX.
+     *
+     * @since 1.0.0
+     * @return void
+     */
+    public function save_product_steps() {
+        $this->verify_request( 'admin', 'edit_products' );
+
+        $product_id = isset( $_POST['product_id'] ) ? absint( $_POST['product_id'] ) : 0;
+        $steps      = isset( $_POST['steps'] ) ? json_decode( wp_unslash( $_POST['steps'] ), true ) : array();
+
+        if ( ! $product_id ) {
+            wp_send_json_error( array(
+                'message' => esc_html__( 'Produto inválido.', 'cm-precheckout' ),
+            ));
+        }
+
+        $sanitized_steps = array();
+        $steps_order     = array();
+
+        if ( is_array( $steps ) ) {
+            foreach ( $steps as $step ) {
+                $step_id   = sanitize_key( $step['id'] ?? '' );
+                $step_name = sanitize_text_field( $step['name'] ?? '' );
+                $step_icon = sanitize_text_field( $step['icon'] ?? '' );
+
+                if ( empty( $step_id ) || empty( $step_name ) ) {
+                    continue;
+                }
+
+                $actions = array();
+
+                if ( ! empty( $step['actions'] ) && is_array( $step['actions'] ) ) {
+                    foreach ( $step['actions'] as $action ) {
+                        $action_key = sanitize_text_field( $action['key'] ?? '' );
+
+                        if ( empty( $action_key ) ) {
+                            continue;
+                        }
+
+                        $actions[] = array(
+                            'key' => $action_key,
+                            'required' => ! empty( $action['required'] ),
+                            'display_name' => sanitize_text_field( $action['display_name'] ?? '' ),
+                            'additional_message' => sanitize_textarea_field( $action['additional_message'] ?? '' ),
+                        );
+
+                        $steps_order[] = $action_key;
+                    }
+                }
+
+                $sanitized_steps[] = array(
+                    'id' => $step_id,
+                    'name' => $step_name,
+                    'icon' => $step_icon,
+                    'actions' => $actions,
+                );
+            }
+        }
+
+        update_post_meta( $product_id, '_cm_precheckout_steps_data', $sanitized_steps );
+        update_post_meta( $product_id, '_cm_precheckout_steps', array_values( array_unique( $steps_order ) ) );
+
+        wp_send_json_success( array(
+            'message' => esc_html__( 'Etapas salvas com sucesso!', 'cm-precheckout' ),
+        ));
+    }
+
+
+    /**
      * Get step template for product
      * 
-     * @since 1.1.0
-     * @version 1.1.0
+     * @since 1.0.0
      * @return void
      */
     public function get_step_template() {
-        $this->verify_request('admin');
+        $this->verify_request( 'admin', 'edit_products' );
 
         $step_key = sanitize_text_field($_POST['step_key']);
         $product_id = absint($_POST['product_id']);
@@ -625,14 +702,89 @@ class Ajax {
 
 
     /**
+     * Create an empty step container.
+     *
+     * @since 1.0.0
+     * @return void
+     */
+    public function create_step_container() {
+        $this->verify_request( 'admin', 'edit_products' );
+
+        $step_name = sanitize_text_field( $_POST['step_name'] ?? '' );
+        $step_icon = sanitize_text_field( $_POST['step_icon'] ?? '' );
+
+        if ( empty( $step_name ) ) {
+            wp_send_json_error( array(
+                'message' => esc_html__( 'Informe um nome para a etapa.', 'cm-precheckout' ),
+            ));
+        }
+
+        $options_library = new Options_Library();
+        $library_options = $options_library->get_enabled_options();
+
+        $step = array(
+            'id' => uniqid( 'step_', true ),
+            'name' => $step_name,
+            'icon' => $step_icon,
+            'actions' => array(),
+        );
+
+        wp_send_json_success( array(
+            'html' => $this->render_step_container_html( $step, $library_options ),
+        ));
+    }
+
+
+    /**
+     * Render action markup for a step.
+     *
+     * @since 1.0.0
+     * @return void
+     */
+    public function get_step_action() {
+        $this->verify_request( 'admin', 'edit_products' );
+
+        $option_key          = sanitize_text_field( $_POST['option_key'] ?? '' );
+        $display_name        = sanitize_text_field( $_POST['display_name'] ?? '' );
+        $additional_message  = sanitize_textarea_field( $_POST['additional_message'] ?? '' );
+        $required            = ! empty( $_POST['required'] );
+
+        if ( empty( $option_key ) ) {
+            wp_send_json_error( array(
+                'message' => esc_html__( 'Opção inválida.', 'cm-precheckout' ),
+            ));
+        }
+
+        $options_library = new Options_Library();
+        $library_options = $options_library->get_enabled_options();
+
+        if ( ! isset( $library_options[ $option_key ] ) ) {
+            wp_send_json_error( array(
+                'message' => esc_html__( 'Opção não encontrada.', 'cm-precheckout' ),
+            ));
+        }
+
+        $action = array(
+            'key' => $option_key,
+            'required' => $required,
+            'display_name' => ! empty( $display_name ) ? $display_name : $library_options[ $option_key ]['name'],
+            'additional_message' => $additional_message,
+        );
+
+        wp_send_json_success( array(
+            'html' => $this->render_step_action_html( $action, $library_options ),
+        ));
+    }
+
+
+    /**
      * Set default options
      * 
-     * @since 1.1.0
-     * @version 1.1.0
+     * @since 1.0.0
      * @return void
      */
     public function set_default_options() {
-        $this->verify_request('admin');
+        $this->verify_request('admin', 'edit_products');
 
         $type = sanitize_text_field($_POST['type']);
         
@@ -659,8 +811,7 @@ class Ajax {
     /**
      * Render step template HTML
      * 
-     * @since 1.1.0
-     * @version 1.1.0
+     * @since 1.0.0
      * @param array $option
      * @param int $product_id
      * @return string
@@ -699,12 +850,11 @@ class Ajax {
     /**
      * Get materials configuration
      * 
-     * @since 1.1.0
-     * @version 1.1.0
+     * @since 1.0.0
      * @return void
      */
     public function get_materials_config() {
-        $this->verify_request('admin');
+        $this->verify_request('admin', 'edit_products');
 
         $product_id = absint($_POST['product_id']);
         $product = wc_get_product($product_id);
@@ -802,8 +952,7 @@ class Ajax {
     /**
      * Save materials configuration
      * 
-     * @since 1.1.0
-     * @version 1.1.0
+     * @since 1.0.0
      * @return void
      */
     public function save_materials_config() {
@@ -848,8 +997,7 @@ class Ajax {
     /**
      * Toggle option enabled/disabled
      * 
-     * @since 1.1.0
-     * @version 1.1.0
+     * @since 1.0.0
      * @return void
      */
     public function toggle_option() {
@@ -875,5 +1023,102 @@ class Ajax {
                 'message' => esc_html__('Opção não encontrada.', 'cm-precheckout')
             ));
         }
+    }
+
+
+    /**
+     * Render step container HTML.
+     *
+     * @since 1.0.0
+     * @param array $step Step data.
+     * @param array $library_options Options library list.
+     * @return string
+     */
+    private function render_step_container_html( $step, $library_options ) {
+        ob_start();
+
+        $step_id   = isset( $step['id'] ) ? $step['id'] : uniqid( 'step_', true );
+        $step_name = isset( $step['name'] ) ? $step['name'] : '';
+        $step_icon = isset( $step['icon'] ) ? $step['icon'] : '';
+        $actions   = isset( $step['actions'] ) && is_array( $step['actions'] ) ? $step['actions'] : array();
+        ?>
+        <div class="cm-precheckout-step" data-step-id="<?php echo esc_attr( $step_id ); ?>" data-step-name="<?php echo esc_attr( $step_name ); ?>" data-step-icon="<?php echo esc_attr( $step_icon ); ?>">
+            <div class="cm-precheckout-step__header">
+                <span class="dashicons dashicons-move cm-precheckout-step__handle"></span>
+                <div class="cm-precheckout-step__title">
+                    <?php if ( ! empty( $step_icon ) ) : ?>
+                        <span class="dashicons <?php echo esc_attr( $step_icon ); ?> cm-precheckout-step__icon"></span>
+                    <?php endif; ?>
+                    <strong class="cm-precheckout-step__name"><?php echo esc_html( $step_name ); ?></strong>
+                </div>
+                <div class="cm-precheckout-step__actions">
+                    <button type="button" class="button button-secondary cm-precheckout-add-action"><?php esc_html_e( 'Adicionar ação', 'cm-precheckout' ); ?></button>
+                    <button type="button" class="button button-link-delete cm-precheckout-remove-step"><?php esc_html_e( 'Remover etapa', 'cm-precheckout' ); ?></button>
+                </div>
+            </div>
+            <div class="cm-precheckout-step__body">
+                <div class="cm-precheckout-step__actions-list">
+                    <?php
+                    if ( ! empty( $actions ) ) {
+                        foreach ( $actions as $action ) {
+                            echo $this->render_step_action_html( $action, $library_options );
+                        }
+                    }
+                    ?>
+                </div>
+            </div>
+        </div>
+        <?php
+
+        return ob_get_clean();
+    }
+
+
+    /**
+     * Render action item HTML.
+     *
+     * @since 1.0.0
+     * @param array $action Action data.
+     * @param array $library_options Options library list.
+     * @return string
+     */
+    private function render_step_action_html( $action, $library_options ) {
+        $action_key = isset( $action['key'] ) ? $action['key'] : '';
+
+        if ( empty( $action_key ) || ! isset( $library_options[ $action_key ] ) ) {
+            return '';
+        }
+
+        $library_option     = $library_options[ $action_key ];
+        $display_name       = $action['display_name'] ?? $library_option['name'];
+        $is_required        = ! empty( $action['required'] );
+        $additional_message = $action['additional_message'] ?? '';
+
+        ob_start();
+        ?>
+        <div class="cm-precheckout-action" data-action-key="<?php echo esc_attr( $action_key ); ?>" data-action-required="<?php echo esc_attr( $is_required ? '1' : '0' ); ?>" data-action-display-name="<?php echo esc_attr( $display_name ); ?>" data-action-message="<?php echo esc_attr( $additional_message ); ?>">
+            <div class="cm-precheckout-action__info">
+                <span class="dashicons <?php echo esc_attr( $library_option['icon'] ); ?>"></span>
+                <div>
+                    <p class="cm-precheckout-action__name"><?php echo esc_html( $display_name ); ?></p>
+                    <p class="cm-precheckout-action__meta">
+                        <?php
+                        echo esc_html( $library_option['name'] );
+                        echo ' · ';
+                        echo $is_required ? esc_html__( 'Obrigatório', 'cm-precheckout' ) : esc_html__( 'Opcional', 'cm-precheckout' );
+                        ?>
+                    </p>
+                </div>
+            </div>
+            <div class="cm-precheckout-action__controls">
+                <?php if ( 'material_selection' === $action_key ) : ?>
+                    <button type="button" class="button configure-materials"><?php esc_html_e( 'Configurar', 'cm-precheckout' ); ?></button>
+                <?php endif; ?>
+                <button type="button" class="button button-secondary cm-precheckout-edit-action"><?php esc_html_e( 'Editar ações', 'cm-precheckout' ); ?></button>
+                <button type="button" class="button cm-precheckout-remove-action"><?php esc_html_e( 'Remover', 'cm-precheckout' ); ?></button>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
     }
 }
