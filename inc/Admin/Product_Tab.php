@@ -9,26 +9,39 @@ defined('ABSPATH') || exit;
  * Product Tab for Pre-checkout Settings
  * 
  * @since 1.0.0
- * @version 1.0.0
+ * @version 1.1.0
  * @package MeuMouse.com
  */
 class Product_Tab {
+    
+    /**
+     * Options library instance
+     * 
+     * @since 1.1.0
+     * @var Options_Library
+     */
+    private $options_library;
 
     /**
      * Constructor
      * 
      * @since 1.0.0
-     * @version 1.0.0
+     * @version 1.1.0
      */
     public function __construct() {
+        $this->options_library = new Options_Library();
+        
         // Add custom tab
-        add_filter( 'woocommerce_product_data_tabs', array( $this, 'add_product_tab' ), 99, 1 );
+        add_filter('woocommerce_product_data_tabs', array($this, 'add_product_tab'), 99, 1);
 
         // Add tab content
-        add_action( 'woocommerce_product_data_panels', array( $this, 'add_tab_content' ) );
+        add_action('woocommerce_product_data_panels', array($this, 'add_tab_content'));
 
         // Save tab data
-        add_action( 'woocommerce_process_product_meta', array( $this, 'save_tab_data' ), 10, 2 );
+        add_action('woocommerce_process_product_meta', array($this, 'save_tab_data'), 10, 2);
+        
+        // Add AJAX handlers
+        add_action('wp_ajax_cm_precheckout_save_product_steps', array($this, 'save_product_steps'));
     }
 
 
@@ -36,15 +49,15 @@ class Product_Tab {
      * Add custom tab to product data
      * 
      * @since 1.0.0
-     * @version 1.0.0
+     * @version 1.1.0
      * @param array $tabs
      * @return array
      */
-    public function add_product_tab( $tabs ) {
+    public function add_product_tab($tabs) {
         $tabs['cm_precheckout'] = array(
-            'label'    => esc_html__( 'Etapas pré checkout', 'cm-precheckout' ),
+            'label'    => esc_html__('Etapas pré checkout', 'cm-precheckout'),
             'target'   => 'cm_precheckout_product_data',
-            'class'    => array( 'show_if_simple', 'show_if_variable' ),
+            'class'    => array('show_if_simple', 'show_if_variable'),
             'priority' => 80,
         );
 
@@ -56,251 +69,348 @@ class Product_Tab {
      * Add tab content
      * 
      * @since 1.0.0
-     * @version 1.0.0
+     * @version 1.1.0
      * @return void
      */
     public function add_tab_content() {
         global $post;
         
-        // get product object
-        $product = wc_get_product( $post->ID );
-
-        // Get saved values
-        $precheckout_active = get_post_meta( $post->ID, '_cm_precheckout_active', true );
-        $materials = get_post_meta( $post->ID, '_cm_precheckout_materials', true );
-        $materials = is_array( $materials ) ? $materials : array();
+        $product = wc_get_product($post->ID);
+        $precheckout_active = get_post_meta($post->ID, '_cm_precheckout_active', true);
+        $product_steps = get_post_meta($post->ID, '_cm_precheckout_steps', true);
+        $product_steps = is_array($product_steps) ? $product_steps : array();
         
-        $enable_size_selection = get_post_meta( $post->ID, '_cm_precheckout_enable_size_selection', true );
-        $size_selectors = get_post_meta( $post->ID, '_cm_precheckout_size_selectors', true );
-        $size_selectors = $size_selectors ? absint( $size_selectors ) : 1;
+        // Get enabled options from library
+        $library_options = $this->options_library->get_enabled_options();
         
-        $enable_name_engraving = get_post_meta( $post->ID, '_cm_precheckout_enable_name_engraving', true );
-        $name_fields = get_post_meta( $post->ID, '_cm_precheckout_name_fields', true );
-        $name_fields = $name_fields ? absint( $name_fields ) : 1;
-        
-        $enable_course_change = get_post_meta( $post->ID, '_cm_precheckout_enable_course_change', true );
-        $enable_stone_sample = get_post_meta( $post->ID, '_cm_precheckout_enable_stone_sample', true );
-        $enable_emblems_sample = get_post_meta( $post->ID, '_cm_precheckout_enable_emblems_sample', true );
-        $default_course = get_post_meta( $post->ID, '_cm_precheckout_default_course', true );
-        
-        // Get global courses
-        $options = get_option( 'cm_precheckout_options', array() );
-        $courses = isset( $options['courses'] ) ? $options['courses'] : array(); ?>
+        // Get saved material configurations
+        $materials_config = get_post_meta($post->ID, '_cm_precheckout_materials_config', true);
+        $materials_config = is_array($materials_config) ? $materials_config : array(); ?>
         
         <div id="cm_precheckout_product_data" class="panel woocommerce_options_panel">
             <div class="options_group">
                 <?php
-                // Active/Deactivate
-                woocommerce_wp_checkbox( array(
+                woocommerce_wp_checkbox(array(
                     'id'            => '_cm_precheckout_active',
-                    'label'         => esc_html__( 'Ativar/Desativar pré-checkout', 'cm-precheckout' ),
-                    'description'   => esc_html__( 'Marque para ativar o pré-checkout para este produto', 'cm-precheckout' ),
+                    'label'         => esc_html__('Ativar/Desativar pré-checkout', 'cm-precheckout'),
+                    'description'   => esc_html__('Marque para ativar o pré-checkout para este produto', 'cm-precheckout'),
                     'value'         => $precheckout_active ? 'yes' : 'no',
                     'default'       => 'yes',
                     'desc_tip'      => true,
-                ) );
+                ));
                 ?>
             </div>
 
             <div class="precheckout-options" style="<?php echo $precheckout_active ? '' : 'display: none;'; ?>">
                 
-                <!-- Step 1: Materials -->
+                <!-- Dynamic Steps Management -->
                 <div class="options_group">
-                    <h4 class="fs-4"><?php esc_html_e( 'Etapa 1: Material', 'cm-precheckout' ); ?></h4>
+                    <h4 class="fs-4"><?php esc_html_e('Gerenciar Etapas do Pré-Checkout', 'cm-precheckout'); ?></h4>
+                    <p class="description"><?php esc_html_e('Arraste e solte para reordenar as etapas. Clique em uma etapa para configurar.', 'cm-precheckout'); ?></p>
                     
-                    <?php
-                    // Get available materials via filter
-                    $available_materials = apply_filters( 'cm_precheckout_available_materials', array(
-                        'ouro_10k' => esc_html__( 'Ouro 10k', 'cm-precheckout' ),
-                        'ouro_18k' => esc_html__( 'Ouro 18k', 'cm-precheckout' ),
-                        'prata_950' => esc_html__( 'Prata 950', 'cm-precheckout' ),
-                    ));
-                    
-                    foreach ( $available_materials as $key => $label ) :
-                        $checked = in_array( $key, $materials ) ? 'yes' : 'no'; ?>
-
-                        <p class="form-field">
-                            <label for="_cm_precheckout_material_<?php echo esc_attr( $key ); ?>">
-                                <?php echo esc_html( $label ); ?>
-                            </label>
-
-                            <input type="checkbox" 
-                                   id="_cm_precheckout_material_<?php echo esc_attr( $key ); ?>" 
-                                   name="_cm_precheckout_materials[]" 
-                                   value="<?php echo esc_attr( $key ); ?>"
-                                   <?php checked( $checked, 'yes' ); ?> />
-                            
-                            <?php if ( $product->is_type( 'variable' ) ) : ?>
-                                <select name="_cm_precheckout_material_attribute_<?php echo esc_attr( $key ); ?>">
-                                    <option value=""><?php esc_html_e( 'Vincular a atributo', 'cm-precheckout' ); ?></option>
-                                    
-                                    <?php foreach ( $product->get_attributes() as $attribute ) :
-                                        if ( $attribute->get_variation() ) : ?>
-                                            <option value="<?php echo esc_attr( $attribute->get_name() ); ?>">
-                                                <?php echo esc_html( $attribute->get_name() ); ?>
-                                            </option>
-                                        <?php endif;
-                                    endforeach; ?>
-                                </select>
-                            <?php endif; ?>
-                        </p>
-                    <?php endforeach; ?>
-                </div>
-
-                <!-- Step 2: Ring Sizes -->
-                <div class="options_group">
-                    <h4 class="fs-4"><?php esc_html_e( 'Etapa 2: Seleção de tamanhos de anel', 'cm-precheckout' ); ?></h4>
-                    
-                    <?php
-                    // Ativar/Desativar seleção de tamanhos
-                    woocommerce_wp_checkbox( array(
-                        'id'            => '_cm_precheckout_enable_size_selection',
-                        'label'         => esc_html__( 'Ativar seleção de tamanhos', 'cm-precheckout' ),
-                        'value'         => $enable_size_selection ? 'yes' : 'no',
-                        'desc_tip'      => true,
-                        'description'   => esc_html__( 'Marque para ativar a seleção de tamanhos de anel', 'cm-precheckout' ),
-                    ));
-                    ?>
-                    
-                    <div class="size-selection-options" style="<?php echo $enable_size_selection ? '' : 'display: none;'; ?>">
+                    <div id="product-steps-container" class="product-steps-container">
                         <?php
-                        woocommerce_wp_select( array(
-                            'id'            => '_cm_precheckout_size_selectors',
-                            'label'         => esc_html__( 'Número de seletores de tamanho', 'cm-precheckout' ),
-                            'options'       => array(
-                                '1' => '1',
-                                '2' => '2',
-                                '3' => '3',
-                                '4' => '4',
-                            ),
-                            'value'         => $size_selectors,
-                            'desc_tip'      => true,
-                            'description'   => esc_html__( 'Quantos campos de seleção de tamanho serão exibidos', 'cm-precheckout' ),
-                        ) );
-                        ?>
-                    </div>
-                </div>
-
-                <!-- Step 3: Personalization -->
-                <div class="options_group">
-                    <h4 class="fs-4"><?php esc_html_e( 'Etapa 3: Personalização', 'cm-precheckout' ); ?></h4>
-                    
-                    <?php
-                    // Name engraving
-                    woocommerce_wp_checkbox( array(
-                        'id'            => '_cm_precheckout_enable_name_engraving',
-                        'label'         => esc_html__( 'Ativar gravação de nomes', 'cm-precheckout' ),
-                        'value'         => $enable_name_engraving ? 'yes' : 'no',
-                        'desc_tip'      => true,
-                        'description'   => esc_html__( 'Permitir que os clientes gravem nomes no anel', 'cm-precheckout' ),
-                    )); ?>
-                    
-                    <div class="name-engraving-options" style="<?php echo $enable_name_engraving ? '' : 'display: none;'; ?>">
-                        <?php
-                        woocommerce_wp_select( array(
-                            'id'            => '_cm_precheckout_name_fields',
-                            'label'         => esc_html__( 'Número de campos para gravação de nomes', 'cm-precheckout' ),
-                            'options'       => array(
-                                '1' => '1',
-                                '2' => '2',
-                                '3' => '3',
-                                '4' => '4',
-                            ),
-                            'value'         => $name_fields,
-                            'desc_tip'      => true,
-                            'description'   => esc_html__( 'Quantos campos de texto serão exibidos para gravação', 'cm-precheckout' ),
-                        ) );
-                        ?>
-                    </div>
-                    
-                    <?php
-                    // Course change
-                    woocommerce_wp_checkbox( array(
-                        'id'            => '_cm_precheckout_enable_course_change',
-                        'label'         => esc_html__( 'Ativar alteração de nome do curso', 'cm-precheckout' ),
-                        'value'         => $enable_course_change ? 'yes' : 'no',
-                        'desc_tip'      => true,
-                        'description'   => esc_html__( 'Permitir que os clientes alterem o curso do anel', 'cm-precheckout' ),
-                    ) );
-                    
-                    // Stone sample
-                    woocommerce_wp_checkbox( array(
-                        'id'            => '_cm_precheckout_enable_stone_sample',
-                        'label'         => esc_html__( 'Ativar amostra de cor de pedras', 'cm-precheckout' ),
-                        'value'         => $enable_stone_sample ? 'yes' : 'no',
-                        'desc_tip'      => true,
-                        'description'   => esc_html__( 'Exibir amostras de cores de pedras disponíveis', 'cm-precheckout' ),
-                    ) );
-                    
-                    // Emblems sample
-                    woocommerce_wp_checkbox( array(
-                        'id'            => '_cm_precheckout_enable_emblems_sample',
-                        'label'         => esc_html__( 'Ativar amostra de emblemas e cursos', 'cm-precheckout' ),
-                        'value'         => $enable_emblems_sample ? 'yes' : 'no',
-                        'desc_tip'      => true,
-                        'description'   => esc_html__( 'Exibir amostras de emblemas e cursos disponíveis', 'cm-precheckout' ),
-                    ) );
-                    ?>
-                    
-                    <div class="emblems-options" style="<?php echo $enable_emblems_sample ? '' : 'display: none;'; ?>">
-                        <?php $course_options = array( '' => esc_html__( 'Selecione um curso', 'cm-precheckout' ) );
-                        
-                        foreach ( $courses as $index => $course ) {
-                            $course_options[ $index ] = $course['name'];
+                        // Display saved steps or default enabled steps
+                        if (!empty($product_steps)) {
+                            foreach ($product_steps as $step_key) {
+                                if (isset($library_options[$step_key])) {
+                                    $this->render_step_item($library_options[$step_key], $post->ID);
+                                }
+                            }
+                        } else {
+                            // Display all enabled options
+                            foreach ($library_options as $option) {
+                                $this->render_step_item($option, $post->ID);
+                            }
                         }
-                        
-                        woocommerce_wp_select( array(
-                            'id'            => '_cm_precheckout_default_course',
-                            'label'         => esc_html__( 'Definir curso padrão do produto', 'cm-precheckout' ),
-                            'options'       => $course_options,
-                            'value'         => $default_course,
-                            'desc_tip'      => true,
-                            'description'   => esc_html__( 'Curso que será pré-selecionado no frontend', 'cm-precheckout' ),
-                        )); ?>
+                        ?>
+                    </div>
+                    
+                    <div class="available-steps">
+                        <h5><?php esc_html_e('Etapas disponíveis para adicionar:', 'cm-precheckout'); ?></h5>
+                        <div class="steps-list">
+                            <?php
+                            // Show disabled options
+                            $all_options = $this->options_library->get_library_options();
+                            $enabled_keys = array_keys($library_options);
+                            
+                            foreach ($all_options as $key => $option) {
+                                if (!in_array($key, $enabled_keys) && $key !== 'summary') {
+                                    echo '<div class="available-step" data-key="' . esc_attr($key) . '">';
+                                    echo '<span class="dashicons ' . esc_attr($option['icon']) . '"></span>';
+                                    echo '<span>' . esc_html($option['name']) . '</span>';
+                                    echo '<button type="button" class="button button-small add-step">' . esc_html__('Adicionar', 'cm-precheckout') . '</button>';
+                                    echo '</div>';
+                                }
+                            }
+                            ?>
+                        </div>
+                    </div>
+                    
+                    <input type="hidden" id="product_steps_order" name="_cm_precheckout_steps_order" 
+                           value="<?php echo esc_attr(implode(',', array_keys($product_steps ?: $library_options))); ?>">
+                </div>
+                
+                <!-- Materials Configuration Modal -->
+                <div id="materials-config-modal" class="cm-modal" style="display: none;">
+                    <div class="cm-modal-overlay"></div>
+                    <div class="cm-modal-content">
+                        <div class="cm-modal-header">
+                            <h3><?php esc_html_e('Configurar Materiais', 'cm-precheckout'); ?></h3>
+                            <button type="button" class="cm-modal-close">&times;</button>
+                        </div>
+                        <div class="cm-modal-body">
+                            <div id="materials-config-container">
+                                <!-- Will be populated via JavaScript -->
+                            </div>
+                        </div>
+                        <div class="cm-modal-footer">
+                            <button type="button" class="button button-secondary cm-modal-close">
+                                <?php esc_html_e('Cancelar', 'cm-precheckout'); ?>
+                            </button>
+                            <button type="button" class="button button-primary save-materials-config">
+                                <?php esc_html_e('Salvar', 'cm-precheckout'); ?>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
         
         <script type="text/javascript">
-            jQuery( document ).ready( function( $ ) {
+            jQuery(document).ready(function($) {
                 // Toggle precheckout options
-                $( '#_cm_precheckout_active' ).change( function() {
-                    if ( $( this ).is( ':checked' ) ) {
-                        $( '.precheckout-options' ).show();
+                $('#_cm_precheckout_active').change(function() {
+                    if ($(this).is(':checked')) {
+                        $('.precheckout-options').show();
                     } else {
-                        $( '.precheckout-options' ).hide();
+                        $('.precheckout-options').hide();
                     }
-                } );
+                });
 
-                // Toggle size selection options
-                $( '#_cm_precheckout_enable_size_selection' ).change( function() {
-                    if ( $( this ).is( ':checked' ) ) {
-                        $( '.size-selection-options' ).show();
-                    } else {
-                        $( '.size-selection-options' ).hide();
+                // Make steps sortable
+                $('#product-steps-container').sortable({
+                    handle: '.step-handle',
+                    update: function(event, ui) {
+                        var order = [];
+                        $('#product-steps-container .step-item').each(function() {
+                            order.push($(this).data('key'));
+                        });
+                        $('#product_steps_order').val(order.join(','));
                     }
-                } );
+                }).disableSelection();
 
-                // Toggle name engraving options
-                $( '#_cm_precheckout_enable_name_engraving' ).change( function() {
-                    if ( $( this ).is( ':checked' ) ) {
-                        $( '.name-engraving-options' ).show();
-                    } else {
-                        $( '.name-engraving-options' ).hide();
-                    }
-                } );
+                // Add step from available steps
+                $('.add-step').click(function() {
+                    var $step = $(this).closest('.available-step');
+                    var key = $step.data('key');
+                    
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'cm_precheckout_get_step_template',
+                            nonce: '<?php echo wp_create_nonce("cm_precheckout_admin_nonce"); ?>',
+                            step_key: key,
+                            product_id: <?php echo $post->ID; ?>
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                $('#product-steps-container').append(response.data.html);
+                                $step.remove();
+                                
+                                // Update order
+                                var order = [];
+                                $('#product-steps-container .step-item').each(function() {
+                                    order.push($(this).data('key'));
+                                });
+                                $('#product_steps_order').val(order.join(','));
+                            }
+                        }
+                    });
+                });
 
-                // Toggle emblems options
-                $( '#_cm_precheckout_enable_emblems_sample' ).change( function() {
-                    if ( $( this ).is( ':checked' ) ) {
-                        $( '.emblems-options' ).show();
-                    } else {
-                        $( '.emblems-options' ).hide();
+                // Remove step
+                $(document).on('click', '.remove-step', function() {
+                    var $step = $(this).closest('.step-item');
+                    var key = $step.data('key');
+                    var name = $step.find('.step-title').text();
+                    
+                    if (confirm('<?php esc_html_e("Tem certeza que deseja remover esta etapa?", "cm-precheckout"); ?>')) {
+                        // Move to available steps
+                        var $availableStep = $('<div class="available-step" data-key="' + key + '">' +
+                            '<span class="dashicons"></span>' +
+                            '<span>' + name + '</span>' +
+                            '<button type="button" class="button button-small add-step"><?php esc_html_e("Adicionar", "cm-precheckout"); ?></button>' +
+                            '</div>');
+                        
+                        $('.available-steps .steps-list').append($availableStep);
+                        $step.remove();
+                        
+                        // Update order
+                        var order = [];
+                        $('#product-steps-container .step-item').each(function() {
+                            order.push($(this).data('key'));
+                        });
+                        $('#product_steps_order').val(order.join(','));
                     }
-                } );
-            } );
+                });
+
+                // Configure materials
+                $(document).on('click', '.configure-materials', function() {
+                    var productId = <?php echo $post->ID; ?>;
+                    
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'cm_precheckout_get_materials_config',
+                            nonce: '<?php echo wp_create_nonce("cm_precheckout_admin_nonce"); ?>',
+                            product_id: productId
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                $('#materials-config-container').html(response.data.html);
+                                $('#materials-config-modal').show();
+                            }
+                        }
+                    });
+                });
+
+                // Save materials configuration
+                $(document).on('click', '.save-materials-config', function() {
+                    var formData = $('#materials-config-form').serialize();
+                    
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: formData + '&action=cm_precheckout_save_materials_config&product_id=<?php echo $post->ID; ?>&nonce=<?php echo wp_create_nonce("cm_precheckout_admin_nonce"); ?>',
+                        success: function(response) {
+                            if (response.success) {
+                                alert('<?php esc_html_e("Configurações salvas com sucesso!", "cm-precheckout"); ?>');
+                                $('#materials-config-modal').hide();
+                            }
+                        }
+                    });
+                });
+
+                // Close modal
+                $('.cm-modal-close, .cm-modal-overlay').click(function() {
+                    $('.cm-modal').hide();
+                });
+
+                // Prevent modal close when clicking inside
+                $('.cm-modal-content').click(function(e) {
+                    e.stopPropagation();
+                });
+            });
         </script>
+        
+        <style>
+            .product-steps-container {
+                margin: 15px 0;
+                padding: 15px;
+                background: #f9f9f9;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                min-height: 100px;
+            }
+            .step-item {
+                background: #fff;
+                border: 1px solid #ccd0d4;
+                border-radius: 4px;
+                padding: 10px;
+                margin-bottom: 10px;
+                display: flex;
+                align-items: center;
+                cursor: move;
+            }
+            .step-handle {
+                margin-right: 10px;
+                color: #a0a5aa;
+                cursor: move;
+            }
+            .step-icon {
+                margin-right: 10px;
+                color: #0073aa;
+            }
+            .step-content {
+                flex: 1;
+            }
+            .step-title {
+                margin: 0 0 5px 0;
+                font-weight: 600;
+            }
+            .step-description {
+                margin: 0;
+                font-size: 12px;
+                color: #666;
+            }
+            .step-actions {
+                margin-left: 10px;
+            }
+            .available-steps {
+                margin-top: 20px;
+            }
+            .available-steps h5 {
+                margin-bottom: 10px;
+            }
+            .steps-list {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            .available-step {
+                background: #fff;
+                border: 1px dashed #ccd0d4;
+                border-radius: 4px;
+                padding: 8px 12px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .available-step .dashicons {
+                color: #72777c;
+            }
+        </style>
+        <?php
+    }
+    
+    /**
+     * Render step item
+     * 
+     * @since 1.1.0
+     * @version 1.1.0
+     * @param array $option
+     * @param int $product_id
+     * @return void
+     */
+    private function render_step_item($option, $product_id) {
+        $config = isset($option['config']) ? $option['config'] : array();
+        ?>
+        <div class="step-item" data-key="<?php echo esc_attr($option['key']); ?>">
+            <span class="dashicons dashicons-move step-handle"></span>
+            <span class="dashicons <?php echo esc_attr($option['icon']); ?> step-icon"></span>
+            <div class="step-content">
+                <h4 class="step-title"><?php echo esc_html($option['name']); ?></h4>
+                <p class="step-description">
+                    <?php 
+                    echo esc_html__('Obrigatório:', 'cm-precheckout') . ' ';
+                    echo $config['required'] ? esc_html__('Sim', 'cm-precheckout') : esc_html__('Não', 'cm-precheckout');
+                    ?>
+                </p>
+            </div>
+            <div class="step-actions">
+                <?php if ($option['key'] === 'material_selection'): ?>
+                    <button type="button" class="button button-small configure-materials">
+                        <?php esc_html_e('Configurar', 'cm-precheckout'); ?>
+                    </button>
+                <?php endif; ?>
+                <button type="button" class="button button-small remove-step">
+                    <?php esc_html_e('Remover', 'cm-precheckout'); ?>
+                </button>
+            </div>
+        </div>
         <?php
     }
     
@@ -309,62 +419,109 @@ class Product_Tab {
      * Save tab data
      * 
      * @since 1.0.0
-     * @version 1.0.0
+     * @version 1.1.0
      * @param int $post_id
      * @param object $post
      * @return void
      */
-    public function save_tab_data( $post_id, $post ) {
+    public function save_tab_data($post_id, $post) {
         // Save active status
-        $active = isset( $_POST['_cm_precheckout_active'] ) ? 'yes' : 'no';
-        update_post_meta( $post_id, '_cm_precheckout_active', $active );
+        $active = isset($_POST['_cm_precheckout_active']) ? 'yes' : 'no';
+        update_post_meta($post_id, '_cm_precheckout_active', $active);
 
-        // Save materials
-        $materials = isset( $_POST['_cm_precheckout_materials'] ) ? array_map( 'sanitize_text_field', $_POST['_cm_precheckout_materials'] ) : array();
-        update_post_meta( $post_id, '_cm_precheckout_materials', $materials );
-
-        // Save size selection activation
-        $enable_size_selection = isset( $_POST['_cm_precheckout_enable_size_selection'] ) ? 'yes' : 'no';
-        update_post_meta( $post_id, '_cm_precheckout_enable_size_selection', $enable_size_selection );
-
-        // Save size selectors (only if size selection is enabled)
-        if ( isset( $_POST['_cm_precheckout_size_selectors'] ) && $enable_size_selection === 'yes' ) {
-            update_post_meta( $post_id, '_cm_precheckout_size_selectors', absint( $_POST['_cm_precheckout_size_selectors'] ) );
-        } else {
-            // Clear the value if disabled
-            delete_post_meta( $post_id, '_cm_precheckout_size_selectors' );
+        // Save steps order
+        if (isset($_POST['_cm_precheckout_steps_order'])) {
+            $steps = explode(',', sanitize_text_field($_POST['_cm_precheckout_steps_order']));
+            update_post_meta($post_id, '_cm_precheckout_steps', $steps);
         }
 
-        // Save name engraving
-        $enable_name_engraving = isset( $_POST['_cm_precheckout_enable_name_engraving'] ) ? 'yes' : 'no';
-        update_post_meta( $post_id, '_cm_precheckout_enable_name_engraving', $enable_name_engraving );
-
-        // Save name fields (only if name engraving is enabled)
-        if ( isset( $_POST['_cm_precheckout_name_fields'] ) && $enable_name_engraving === 'yes' ) {
-            update_post_meta( $post_id, '_cm_precheckout_name_fields', absint( $_POST['_cm_precheckout_name_fields'] ) );
-        } else {
-            // Clear the value if disabled
-            delete_post_meta( $post_id, '_cm_precheckout_name_fields' );
+        // Save material configurations if they exist
+        if (isset($_POST['_cm_precheckout_materials_config'])) {
+            $materials_config = json_decode(stripslashes($_POST['_cm_precheckout_materials_config']), true);
+            if (is_array($materials_config)) {
+                update_post_meta($post_id, '_cm_precheckout_materials_config', $materials_config);
+            }
         }
 
-        // Save course change
-        $enable_course_change = isset( $_POST['_cm_precheckout_enable_course_change'] ) ? 'yes' : 'no';
-        update_post_meta( $post_id, '_cm_precheckout_enable_course_change', $enable_course_change );
+        // Legacy compatibility - save individual settings for existing products
+        $this->save_legacy_settings($post_id);
+    }
 
-        // Save stone sample
-        $enable_stone_sample = isset( $_POST['_cm_precheckout_enable_stone_sample'] ) ? 'yes' : 'no';
-        update_post_meta( $post_id, '_cm_precheckout_enable_stone_sample', $enable_stone_sample );
+    /**
+     * Save legacy settings for compatibility
+     * 
+     * @since 1.1.0
+     * @version 1.1.0
+     * @param int $post_id
+     * @return void
+     */
+    private function save_legacy_settings($post_id) {
+        // Materials
+        if (isset($_POST['_cm_precheckout_materials'])) {
+            $materials = array_map('sanitize_text_field', $_POST['_cm_precheckout_materials']);
+            update_post_meta($post_id, '_cm_precheckout_materials', $materials);
+        }
 
-        // Save emblems sample
-        $enable_emblems_sample = isset( $_POST['_cm_precheckout_enable_emblems_sample'] ) ? 'yes' : 'no';
-        update_post_meta( $post_id, '_cm_precheckout_enable_emblems_sample', $enable_emblems_sample );
+        // Size selection
+        $enable_size_selection = isset($_POST['_cm_precheckout_enable_size_selection']) ? 'yes' : 'no';
+        update_post_meta($post_id, '_cm_precheckout_enable_size_selection', $enable_size_selection);
 
-        // Save default course (only if emblems sample is enabled)
-        if ( isset( $_POST['_cm_precheckout_default_course'] ) && $enable_emblems_sample === 'yes' ) {
-            update_post_meta( $post_id, '_cm_precheckout_default_course', sanitize_text_field( $_POST['_cm_precheckout_default_course'] ) );
+        if (isset($_POST['_cm_precheckout_size_selectors'])) {
+            update_post_meta($post_id, '_cm_precheckout_size_selectors', absint($_POST['_cm_precheckout_size_selectors']));
+        }
+
+        // Name engraving
+        $enable_name_engraving = isset($_POST['_cm_precheckout_enable_name_engraving']) ? 'yes' : 'no';
+        update_post_meta($post_id, '_cm_precheckout_enable_name_engraving', $enable_name_engraving);
+
+        if (isset($_POST['_cm_precheckout_name_fields'])) {
+            update_post_meta($post_id, '_cm_precheckout_name_fields', absint($_POST['_cm_precheckout_name_fields']));
+        }
+
+        // Other options
+        $enable_course_change = isset($_POST['_cm_precheckout_enable_course_change']) ? 'yes' : 'no';
+        update_post_meta($post_id, '_cm_precheckout_enable_course_change', $enable_course_change);
+
+        $enable_stone_sample = isset($_POST['_cm_precheckout_enable_stone_sample']) ? 'yes' : 'no';
+        update_post_meta($post_id, '_cm_precheckout_enable_stone_sample', $enable_stone_sample);
+
+        $enable_emblems_sample = isset($_POST['_cm_precheckout_enable_emblems_sample']) ? 'yes' : 'no';
+        update_post_meta($post_id, '_cm_precheckout_enable_emblems_sample', $enable_emblems_sample);
+
+        if (isset($_POST['_cm_precheckout_default_course'])) {
+            update_post_meta($post_id, '_cm_precheckout_default_course', sanitize_text_field($_POST['_cm_precheckout_default_course']));
+        }
+    }
+
+    /**
+     * Save product steps via AJAX
+     * 
+     * @since 1.1.0
+     * @version 1.1.0
+     * @return void
+     */
+    public function save_product_steps() {
+        // Verify nonce and permissions
+        if (!check_ajax_referer('cm_precheckout_admin_nonce', 'nonce', false) || 
+            !current_user_can('edit_products')) {
+            wp_send_json_error(array(
+                'message' => esc_html__('Permissão negada.', 'cm-precheckout')
+            ));
+        }
+
+        $product_id = isset($_POST['product_id']) ? absint($_POST['product_id']) : 0;
+        $steps = isset($_POST['steps']) ? array_map('sanitize_text_field', $_POST['steps']) : array();
+
+        if ($product_id && !empty($steps)) {
+            update_post_meta($product_id, '_cm_precheckout_steps', $steps);
+            
+            wp_send_json_success(array(
+                'message' => esc_html__('Etapas salvas com sucesso!', 'cm-precheckout')
+            ));
         } else {
-            // Clear the value if disabled
-            delete_post_meta( $post_id, '_cm_precheckout_default_course' );
+            wp_send_json_error(array(
+                'message' => esc_html__('Dados inválidos.', 'cm-precheckout')
+            ));
         }
     }
 }
