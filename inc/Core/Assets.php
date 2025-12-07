@@ -2,6 +2,9 @@
 
 namespace MeuMouse\Cm_Precheckout\Core;
 
+use MeuMouse\Cm_Precheckout\Admin\Options_Library;
+use MeuMouse\Cm_Precheckout\Helpers\Utils;
+
 // Exit if accessed directly.
 defined('ABSPATH') || exit;
 
@@ -28,6 +31,8 @@ class Assets {
         'admin' => array(
             'css' => 'cm-precheckout-admin',
             'js' => 'cm-precheckout-admin',
+            'product_tab_css' => 'cm-precheckout-product-tab',
+            'product_tab_js' => 'cm-precheckout-product-tab',
         ),
     );
 
@@ -244,7 +249,6 @@ class Assets {
      * Enqueue product editor assets
      * 
      * @since 1.0.0
-     * @version 1.0.0
      * @return void
      */
     private function enqueue_product_editor_assets() {
@@ -256,10 +260,26 @@ class Assets {
             'all'
         );
 
+        wp_enqueue_style(
+            $this->handles['admin']['product_tab_css'],
+            $this->get_asset_url( 'css', 'admin', 'product-tab' ),
+            array( $this->handles['admin']['css'] ),
+            $this->get_asset_version(),
+            'all'
+        );
+
         wp_enqueue_script(
             $this->handles['admin']['js'],
             $this->get_asset_url( 'js', 'admin', 'admin' ),
             array( 'jquery', 'wp-util' ),
+            $this->get_asset_version(),
+            true
+        );
+
+        wp_enqueue_script(
+            $this->handles['admin']['product_tab_js'],
+            $this->get_asset_url( 'js', 'admin', 'product-tab' ),
+            array( 'jquery', 'jquery-ui-sortable', $this->handles['admin']['js'] ),
             $this->get_asset_version(),
             true
         );
@@ -305,7 +325,6 @@ class Assets {
      * Localize admin script
      * 
      * @since 1.0.0
-     * @version 1.0.0
      * @param string $context Context of localization
      * @return void
      */
@@ -324,11 +343,117 @@ class Assets {
             ),
         );
 
+        if ( $context === 'product_editor' ) {
+            $localization_data['product_tab'] = $this->get_product_tab_localization();
+        }
+
         wp_localize_script(
             $this->handles['admin']['js'],
             'cm_precheckout_admin',
             $localization_data
         );
+
+        if ( $context === 'product_editor' ) {
+            wp_localize_script(
+                $this->handles['admin']['product_tab_js'],
+                'cm_precheckout_product_tab',
+                $localization_data['product_tab']
+            );
+        }
+    }
+
+    
+    /**
+     * Prepare localization data for the product tab
+     *
+     * @since 1.0.0
+     * @return array
+     */
+    private function get_product_tab_localization() {
+        global $post;
+
+        $product_id = $post ? $post->ID : 0;
+        $options_library = new Options_Library();
+        $library_options = $options_library->get_enabled_options();
+
+        $steps_data = get_post_meta( $product_id, '_cm_precheckout_steps_data', true );
+
+        if ( ! is_array( $steps_data ) ) {
+            $steps_data = $this->build_default_steps_data( $product_id, $library_options );
+        }
+
+        $parsed_library_options = array();
+
+        foreach ( $library_options as $key => $option ) {
+            $parsed_library_options[ $key ] = array(
+                'key' => $key,
+                'name' => $option['name'],
+                'icon' => $option['icon'],
+                'config' => array(
+                    'required' => ! empty( $option['config']['required'] ),
+                    'display_name' => $option['config']['display_name'] ?? $option['name'],
+                    'additional_message' => $option['config']['additional_message'] ?? '',
+                ),
+            );
+        }
+
+        return array(
+            'product_id' => $product_id,
+            'nonce'      => wp_create_nonce( 'cm_precheckout_admin_nonce' ),
+            'steps'      => $steps_data,
+            'options'    => $parsed_library_options,
+            'i18n'       => array(
+                'add_action'     => esc_html__( 'Adicionar ação', 'cm-precheckout' ),
+                'edit_action'    => esc_html__( 'Editar ação', 'cm-precheckout' ),
+                'remove_step'    => esc_html__( 'Tem certeza que deseja remover esta etapa?', 'cm-precheckout' ),
+                'remove_action'  => esc_html__( 'Tem certeza que deseja remover esta ação?', 'cm-precheckout' ),
+                'required_label' => esc_html__( 'Obrigatório', 'cm-precheckout' ),
+                'optional_label' => esc_html__( 'Opcional', 'cm-precheckout' ),
+            ),
+        );
+    }
+
+
+    /**
+     * Build default steps using legacy configuration
+     *
+     * @since 1.0.0
+     * @param int   $product_id Product ID.
+     * @param array $library_options Library options list.
+     * @return array
+     */
+    private function build_default_steps_data( $product_id, $library_options ) {
+        $stored_steps = get_post_meta( $product_id, '_cm_precheckout_steps', true );
+        $stored_steps = is_array( $stored_steps ) ? $stored_steps : array();
+
+        if ( empty( $stored_steps ) ) {
+            $stored_steps = array_keys( $library_options );
+        }
+
+        $steps_data = array();
+
+        foreach ( $stored_steps as $index => $step_key ) {
+            if ( ! isset( $library_options[ $step_key ] ) ) {
+                continue;
+            }
+
+            $option = $library_options[ $step_key ];
+            $steps_data[] = array(
+                'id' => 'step_' . ( $index + 1 ),
+                'name' => $option['name'],
+                'icon' => $option['icon'],
+                'actions' => array(
+                    array(
+                        'key' => $option['key'],
+                        'required' => ! empty( $option['config']['required'] ),
+                        'display_name' => $option['config']['display_name'] ?? $option['name'],
+                        'additional_message' => $option['config']['additional_message'] ?? '',
+                    ),
+                ),
+            );
+        }
+
+        return $steps_data;
     }
 
 
