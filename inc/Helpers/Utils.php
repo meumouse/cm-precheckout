@@ -2,6 +2,8 @@
 
 namespace MeuMouse\Cm_Precheckout\Helpers;
 
+use MeuMouse\Cm_Precheckout\Admin\Options_Library;
+
 // Exit if accessed directly.
 defined('ABSPATH') || exit;
 
@@ -320,5 +322,137 @@ class Utils {
     public static function clear_cache() {
         self::$options = null;
         self::$materials_cache = array();
+    }
+
+
+    /**
+     * Get product steps configuration
+     * 
+     * @since 1.1.0
+     * @version 1.1.0
+     * @param int $product_id
+     * @return array
+     */
+    public static function get_product_steps($product_id) {
+        $steps = get_post_meta($product_id, '_cm_precheckout_steps', true);
+        
+        if (empty($steps)) {
+            // Fallback to legacy steps
+            $steps = array('material_selection', 'size_selection', 'personalization', 'summary');
+        }
+        
+        return is_array($steps) ? $steps : array();
+    }
+
+    
+    /**
+     * Get step configuration
+     * 
+     * @since 1.1.0
+     * @version 1.1.0
+     * @param string $step_key
+     * @param int $product_id
+     * @return array|null
+     */
+    public static function get_step_config($step_key, $product_id) {
+        $options_library = new Options_Library();
+        $option = $options_library->get_option_by_key($step_key);
+        
+        if (!$option) {
+            return null;
+        }
+        
+        // Get product-specific configuration
+        $product_steps = self::get_product_steps($product_id);
+        $is_enabled = in_array($step_key, $product_steps);
+        
+        $config = $option['config'] ?? array();
+        $config['enabled'] = $is_enabled;
+        $config['key'] = $step_key;
+        $config['name'] = $option['name'];
+        $config['icon'] = $option['icon'];
+        
+        return $config;
+    }
+
+
+    /**
+     * Validate step completion
+     * 
+     * @since 1.1.0
+     * @version 1.1.0
+     * @param string $step_key
+     * @param array $data
+     * @param int $product_id
+     * @return array
+     */
+    public static function validate_step($step_key, $data, $product_id) {
+        $config = self::get_step_config($step_key, $product_id);
+        
+        if (!$config || !$config['enabled']) {
+            return array('valid' => true, 'message' => '');
+        }
+        
+        switch ($step_key) {
+            case 'material_selection':
+                if ($config['required'] && empty($data['material'])) {
+                    return array(
+                        'valid' => false,
+                        'message' => esc_html__('Por favor, selecione um material.', 'cm-precheckout')
+                    );
+                }
+                break;
+                
+            case 'size_selection':
+                if ($config['required'] && (empty($data['sizes']) || !is_array($data['sizes']))) {
+                    return array(
+                        'valid' => false,
+                        'message' => esc_html__('Por favor, selecione pelo menos um tamanho.', 'cm-precheckout')
+                    );
+                }
+                break;
+                
+            case 'file_upload':
+                if ($config['required'] && empty($data['file'])) {
+                    return array(
+                        'valid' => false,
+                        'message' => esc_html__('Por favor, envie um arquivo.', 'cm-precheckout')
+                    );
+                }
+                break;
+                
+            // Add validation for other steps as needed
+        }
+        
+        return array('valid' => true, 'message' => '');
+    }
+
+
+    /**
+     * Get materials with variation links
+     * 
+     * @since 1.1.0
+     * @version 1.1.0
+     * @param int $product_id
+     * @return array
+     */
+    public static function get_materials_with_variations($product_id) {
+        $materials = self::get_product_materials($product_id);
+        $materials_config = get_post_meta($product_id, '_cm_precheckout_materials_config', true);
+        $materials_config = is_array($materials_config) ? $materials_config : array();
+        $result = array();
+
+        foreach ($materials as $material_key) {
+            $config = isset($materials_config[$material_key]) ? $materials_config[$material_key] : array();
+            
+            $result[$material_key] = array(
+                'key' => $material_key,
+                'label' => self::get_material_label($material_key),
+                'variation_id' => $config['variation_id'] ?? '',
+                'additional_price' => $config['additional_price'] ?? 0,
+            );
+        }
+        
+        return $result;
     }
 }
