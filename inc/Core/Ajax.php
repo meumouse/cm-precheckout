@@ -566,4 +566,255 @@ class Ajax {
             ));
         }
     }
+
+
+    /**
+     * Get step template for product
+     * 
+     * @since 1.1.0
+     * @version 1.1.0
+     * @return void
+     */
+    public function get_step_template() {
+        $this->verify_request('admin');
+
+        $step_key = sanitize_text_field($_POST['step_key']);
+        $product_id = absint($_POST['product_id']);
+        
+        $options_library = new Options_Library();
+        $option = $options_library->get_option_by_key($step_key);
+        
+        if ($option) {
+            $html = $this->render_step_template($option, $product_id);
+            
+            wp_send_json_success(array(
+                'html' => $html
+            ));
+        } else {
+            wp_send_json_error(array(
+                'message' => esc_html__('Opção não encontrada.', 'cm-precheckout')
+            ));
+        }
+    }
+
+    /**
+     * Render step template HTML
+     * 
+     * @since 1.1.0
+     * @version 1.1.0
+     * @param array $option
+     * @param int $product_id
+     * @return string
+     */
+    private function render_step_template($option, $product_id) {
+        ob_start();
+        ?>
+        <div class="step-item" data-key="<?php echo esc_attr($option['key']); ?>">
+            <span class="dashicons dashicons-move step-handle"></span>
+            <span class="dashicons <?php echo esc_attr($option['icon']); ?> step-icon"></span>
+            <div class="step-content">
+                <h4 class="step-title"><?php echo esc_html($option['name']); ?></h4>
+                <p class="step-description">
+                    <?php 
+                    $config = isset($option['config']) ? $option['config'] : array();
+                    echo esc_html__('Obrigatório:', 'cm-precheckout') . ' ';
+                    echo $config['required'] ? esc_html__('Sim', 'cm-precheckout') : esc_html__('Não', 'cm-precheckout');
+                    ?>
+                </p>
+            </div>
+            <div class="step-actions">
+                <?php if ($option['key'] === 'material_selection'): ?>
+                    <button type="button" class="button button-small configure-materials">
+                        <?php esc_html_e('Configurar', 'cm-precheckout'); ?>
+                    </button>
+                <?php endif; ?>
+                <button type="button" class="button button-small remove-step">
+                    <?php esc_html_e('Remover', 'cm-precheckout'); ?>
+                </button>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Get materials configuration
+     * 
+     * @since 1.1.0
+     * @version 1.1.0
+     * @return void
+     */
+    public function get_materials_config() {
+        $this->verify_request('admin');
+
+        $product_id = absint($_POST['product_id']);
+        $product = wc_get_product($product_id);
+        
+        if (!$product) {
+            wp_send_json_error(array(
+                'message' => esc_html__('Produto não encontrado.', 'cm-precheckout')
+            ));
+        }
+
+        $materials = Utils::get_product_materials($product_id);
+        $materials_config = get_post_meta($product_id, '_cm_precheckout_materials_config', true);
+        $materials_config = is_array($materials_config) ? $materials_config : array();
+        
+        ob_start();
+        ?>
+        <form id="materials-config-form">
+            <input type="hidden" name="product_id" value="<?php echo $product_id; ?>">
+            
+            <table class="form-table">
+                <thead>
+                    <tr>
+                        <th><?php esc_html_e('Material', 'cm-precheckout'); ?></th>
+                        <th><?php esc_html_e('Vincular a Variação', 'cm-precheckout'); ?></th>
+                        <th><?php esc_html_e('Preço Adicional', 'cm-precheckout'); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($materials)): ?>
+                        <tr>
+                            <td colspan="3">
+                                <?php esc_html_e('Nenhum material configurado para este produto.', 'cm-precheckout'); ?>
+                            </td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($materials as $material_key): 
+                            $material_label = Utils::get_material_label($material_key);
+                            $config = isset($materials_config[$material_key]) ? $materials_config[$material_key] : array();
+                            ?>
+                            <tr>
+                                <td>
+                                    <strong><?php echo esc_html($material_label); ?></strong>
+                                    <input type="hidden" 
+                                        name="materials[<?php echo esc_attr($material_key); ?>][key]" 
+                                        value="<?php echo esc_attr($material_key); ?>">
+                                </td>
+                                <td>
+                                    <?php if ($product->is_type('variable')): 
+                                        $variations = $product->get_available_variations();
+                                        ?>
+                                        <select name="materials[<?php echo esc_attr($material_key); ?>][variation_id]" 
+                                                class="variation-select">
+                                            <option value=""><?php esc_html_e('Nenhuma', 'cm-precheckout'); ?></option>
+                                            <?php foreach ($variations as $variation): 
+                                                $variation_obj = wc_get_product($variation['variation_id']);
+                                                if ($variation_obj):
+                                                    $attributes = $variation_obj->get_variation_attributes();
+                                                    $attribute_label = implode(', ', $attributes);
+                                                    ?>
+                                                    <option value="<?php echo esc_attr($variation['variation_id']); ?>"
+                                                        <?php selected($config['variation_id'] ?? '', $variation['variation_id']); ?>>
+                                                        <?php echo esc_html($attribute_label); ?>
+                                                    </option>
+                                                <?php endif; ?>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    <?php else: ?>
+                                        <p class="description">
+                                            <?php esc_html_e('Disponível apenas para produtos variáveis', 'cm-precheckout'); ?>
+                                        </p>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <input type="number" 
+                                        name="materials[<?php echo esc_attr($material_key); ?>][additional_price]" 
+                                        value="<?php echo esc_attr($config['additional_price'] ?? 0); ?>"
+                                        step="0.01" 
+                                        min="0" 
+                                        class="small-text">
+                                    <?php echo get_woocommerce_currency_symbol(); ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </form>
+        <?php
+        
+        wp_send_json_success(array(
+            'html' => ob_get_clean()
+        ));
+    }
+
+    /**
+     * Save materials configuration
+     * 
+     * @since 1.1.0
+     * @version 1.1.0
+     * @return void
+     */
+    public function save_materials_config() {
+        $this->verify_request('admin');
+
+        $product_id = absint($_POST['product_id']);
+        
+        if (isset($_POST['materials']) && is_array($_POST['materials'])) {
+            $materials_config = array();
+            
+            foreach ($_POST['materials'] as $material_key => $config) {
+                $sanitized_config = array(
+                    'variation_id' => isset($config['variation_id']) ? absint($config['variation_id']) : '',
+                    'additional_price' => isset($config['additional_price']) ? floatval($config['additional_price']) : 0,
+                );
+                
+                $materials_config[sanitize_text_field($material_key)] = $sanitized_config;
+            }
+            
+            update_post_meta($product_id, '_cm_precheckout_materials_config', $materials_config);
+            
+            // Also update material prices for legacy compatibility
+            $material_prices = array();
+            foreach ($materials_config as $material_key => $config) {
+                if ($config['additional_price'] > 0) {
+                    $material_prices[$material_key] = $config['additional_price'];
+                }
+            }
+            update_post_meta($product_id, '_cm_precheckout_material_prices', $material_prices);
+            
+            wp_send_json_success(array(
+                'message' => esc_html__('Configurações salvas com sucesso!', 'cm-precheckout')
+            ));
+        } else {
+            wp_send_json_error(array(
+                'message' => esc_html__('Nenhuma configuração fornecida.', 'cm-precheckout')
+            ));
+        }
+    }
+
+
+    /**
+     * Toggle option enabled/disabled
+     * 
+     * @since 1.1.0
+     * @version 1.1.0
+     * @return void
+     */
+    public function toggle_option() {
+        $this->verify_request('admin');
+
+        $key = sanitize_text_field($_POST['key']);
+        $enabled = $_POST['enabled'] === 'true';
+        
+        $options_library = new Options_Library();
+        $options = $options_library->get_library_options();
+        
+        if (isset($options[$key])) {
+            $options[$key]['enabled'] = $enabled;
+            update_option('cm_precheckout_library_options', $options);
+            
+            wp_send_json_success(array(
+                'message' => $enabled ? 
+                    esc_html__('Opção ativada com sucesso!', 'cm-precheckout') : 
+                    esc_html__('Opção desativada com sucesso!', 'cm-precheckout')
+            ));
+        } else {
+            wp_send_json_error(array(
+                'message' => esc_html__('Opção não encontrada.', 'cm-precheckout')
+            ));
+        }
+    }
 }
